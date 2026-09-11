@@ -39,3 +39,8 @@ config:
     # which was removed from freedesktop-sdk. Use a local override that depends
     # on runtime-minimal.bst instead.
     buildsystems/jobserver-pool.bst: buildsystems/jobserver-pool.bst
+
+    # gnome-build-meta meson.bst depends on public-stacks/runtime-gnu.bst,
+    # which was removed from freedesktop-sdk. Use a local override that depends
+    # on runtime-minimal.bst instead.
+    buildsystems/meson.bst: buildsystems/meson.bst
