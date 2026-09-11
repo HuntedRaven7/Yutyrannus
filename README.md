@@ -31,21 +31,36 @@ sudo bootc switch ghcr.io/robin/yutyrannus-nvidia:testing
 
 Tracks the latest Linux mainline pre-release (`v7.x-rcN`). Bump `elements/core/linux-mainline.bst` when a new `-rc` is desired.
 
+## Supply chain
+
+- **SBOM**: SPDX 2.3 generated with `buildstream-sbom`, attached as OCI referrer via `oras`, signed with cosign
+- **Cosign**: Keyless Sigstore OIDC signing of image and SBOM
+- **Chunkah**: OCI layer optimization via `quay.io/coreos/chunkah:v0.6.0` with `fakecap` xattr restoration
+- **CAS cache**: BuildStream artifacts cached in GitHub Actions (`actions/cache@v6`) and remotely via `cache.projectbluefin.io`
+
 ## Building from source
 
 ```bash
-just build
-just boot-vm
+just build          # build + export + chunkify
+just sbom           # generate SBOM
+just boot-vm        # test in QEMU
+just verify         # verify cosign + SBOM + attestation
 ```
+
+## CI
+
+- `build.yml` — BuildStream build, export, push to GHCR
+- `publish.yml` — Chunkify, lint, audit, sign, attach SBOM, promote stream tags
+- `validate.yml` — PR validation: `bst show`, patch checks, image variant matrix
+- `publish-smoke.yml` — Observational smoke tests after publish
 
 ## Differences from Dakota
 
-Yutyrannus is a simplified fork of [Dakota](https://github.com/projectbluefin/dakota) with:
+Yutyrannus is a fork of [Dakota](https://github.com/projectbluefin/dakota) with:
 - GNOME 51 tracking (instead of GNOME 50)
 - Linux mainline pre-release kernel (instead of freedesktop-sdk stable)
 - NVIDIA-only image (no default variant)
-- Simplified build system (no feedback loop, AI agents, cosign/SLSA, SBOM, chunkah)
-- No supply-chain signing infrastructure
+- Supply chain security: SBOM, cosign, chunkah, CAS cache
 
 ## Contributing
 
