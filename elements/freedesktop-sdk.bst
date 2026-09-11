@@ -14,5 +14,3 @@ config:
     (?):
     - gaming == true:
         components/linux.bst: core/linux-ogc.bst
-
-    public-stacks/runtime-gnu.bst: freedesktop-sdk.bst:public-stacks/runtime-minimal.bst
