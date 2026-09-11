@@ -66,7 +66,3 @@ config:
     (?):
     - gaming == true:
         components/linux.bst: core/linux-ogc.bst
-
-    # gnome-build-meta gnome-51 jobserver-pool.bst depends on public-stacks/runtime-gnu.bst,
-    # which was removed from freedesktop-sdk after 25.08. Fall back to runtime-minimal.
-    public-stacks/runtime-gnu.bst: public-stacks/runtime-minimal.bst
