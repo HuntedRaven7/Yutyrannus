@@ -1,5 +1,5 @@
 # Yutyrannus
-*Yutyrannus harenipes* — a cutting-edge GNOME OS testbed image
+*Yutyrannus harenipes* — a cutting-edge GNOME OS test-bed image
 
 [GNOME OS](https://os.gnome.org/) built from source with BuildStream 2, tracking GNOME 51 on the latest Linux mainline pre-release kernel with NVIDIA proprietary drivers.
 
