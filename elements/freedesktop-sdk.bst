@@ -9,12 +9,6 @@ sources:
   path: patches/freedesktop-sdk
 
 config:
-  options:
-    arch: '%{arch}'
-    (?):
-    - x86_64_v3:
-        x86_64_v3: true
-
   overrides:
     components/linux.bst: core/linux-mainline.bst
     (?):
