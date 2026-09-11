@@ -623,3 +623,192 @@ avatar-audit:
         [ "$STATUS" -eq 0 ] && echo "PASS: user-avatar configuration OK"
         exit "$STATUS"
         '
+
+# ── Chunkah ──────────────────────────────────────────────────────────
+# Use the pre-built chunkah image from quay.io (v0.6.0).
+# coreos/chunkah#113 is closed — the resolution is this physical overlay+xattr
+# approach, not a libc fallback in chunkah. The overlay+fakecap-restore path
+# remains required because chunkah's rustix xattr backend uses raw syscalls that
+# bypass LD_PRELOAD, so xattrs must be physically applied to a writable overlay.
+chunkify image_ref:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    if [ "${BUILD_SKIP_CHUNKIFY:-}" = "1" ]; then
+        echo "==> Skipping chunkify (BUILD_SKIP_CHUNKIFY=1)"
+        exit 0
+    fi
+
+    SUDO_CMD=""
+    if [ "$(id -u)" -ne 0 ]; then
+        SUDO_CMD="sudo"
+    fi
+
+    echo "==> Chunkifying {{image_ref}}..."
+
+    CONFIG=$($SUDO_CMD podman inspect "{{image_ref}}")
+
+    FAKECAP_RESTORE="{{justfile_directory()}}/files/fakecap/fakecap-restore"
+    if [ ! -x "$FAKECAP_RESTORE" ]; then
+        echo "==> Compiling fakecap-restore..."
+        gcc -O2 -o "$FAKECAP_RESTORE" "{{justfile_directory()}}/files/fakecap/fakecap-restore.c"
+    fi
+
+    LOWER=$($SUDO_CMD podman image mount "{{image_ref}}")
+
+    cleanup() {
+        $SUDO_CMD umount "$MERGED" 2>/dev/null || true
+        $SUDO_CMD rm -rf "$UPPER" "$WORK" "$MERGED"
+        $SUDO_CMD podman image umount "{{image_ref}}" >/dev/null 2>&1 || true
+    }
+    trap cleanup EXIT
+
+    _OVERLAY_TMPDIR="/var/tmp"
+    for _candidate in /var/lib/containers /var/tmp; do
+        if [ -d "$_candidate" ]; then
+            _free=$(df --output=avail "$_candidate" 2>/dev/null | tail -1 || echo 0)
+            _best=$(df --output=avail "$_OVERLAY_TMPDIR" 2>/dev/null | tail -1 || echo 0)
+            if (( _free > _best )); then _OVERLAY_TMPDIR="$_candidate"; fi
+        fi
+    done
+    echo "==> overlay tmpdir: ${_OVERLAY_TMPDIR} ($(df -h --output=avail "${_OVERLAY_TMPDIR}" | tail -1 | tr -d ' ') free)"
+    UPPER=$(mktemp -d -p "$_OVERLAY_TMPDIR"); WORK=$(mktemp -d -p "$_OVERLAY_TMPDIR"); MERGED=$(mktemp -d -p "$_OVERLAY_TMPDIR")
+    $SUDO_CMD chmod 755 "$UPPER" "$WORK" "$MERGED"
+    $SUDO_CMD mount -t overlay overlay \
+        -o "lowerdir=${LOWER},upperdir=${UPPER},workdir=${WORK}" \
+        "$MERGED"
+
+    echo "==> Applying user.component xattrs via fakecap-restore..."
+    $SUDO_CMD "$FAKECAP_RESTORE" files/fakecap-manifest.tsv "$MERGED"
+
+    CHUNKAH_REF="quay.io/coreos/chunkah:v0.6.0@sha256:ff8b8b466a942ec6000445d4001fc661e2fc5a952ad9ee29b4de9ab09d1d1708"
+    for attempt in 1 2 3; do
+        $SUDO_CMD podman pull "$CHUNKAH_REF" && break
+        echo "==> chunkah pull attempt $attempt failed, retrying in 10s..."
+        [ "$attempt" -lt 3 ] && sleep 10
+    done
+    LOADED=$($SUDO_CMD podman run --rm \
+        --pull never \
+        --security-opt label=type:unconfined_t \
+        -v "${MERGED}:/chunkah:ro" \
+        -e "CHUNKAH_ROOTFS=/chunkah" \
+        -e "CHUNKAH_CONFIG_STR=$CONFIG" \
+        "$CHUNKAH_REF" build --max-layers 120 --prune /sysroot/ \
+        --label ostree.commit- --label ostree.final-diffid- \
+        | $SUDO_CMD podman load)
+
+    echo "$LOADED"
+
+    NEW_REF=$(echo "$LOADED" | sed -n 's/^Loaded image(s): //p; s/^Loaded image: //p' | head -1)
+    if [ -z "$NEW_REF" ]; then
+        NEW_REF=$(echo "$LOADED" | grep -oP '^[0-9a-f]{64}$' | head -1 || true)
+    fi
+
+    if [ -n "$NEW_REF" ] && [ "$NEW_REF" != "{{image_ref}}" ]; then
+        echo "==> Retagging chunked image to {{image_ref}}..."
+        $SUDO_CMD podman tag "$NEW_REF" "{{image_ref}}"
+    fi
+
+    if [ -n "$SUDO_CMD" ]; then
+        $SUDO_CMD podman save "{{image_ref}}" | podman load
+    fi
+
+# ── SBOM ─────────────────────────────────────────────────────────────
+# Generate a BST-native SBOM (SPDX 2.3) using buildstream-sbom.
+[group('test')]
+sbom variant="default":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    case "{{variant}}" in
+        default) ELEMENT="oci/yutyrannus-nvidia.bst"; SPDX_NAME="yutyrannus-nvidia"; OUTFILE="yutyrannus-nvidia.spdx.json" ;;
+        *) echo "ERROR: unknown variant '{{variant}}' (expected: default)" >&2; exit 1 ;;
+    esac
+
+    mkdir -p "${HOME}/.cache/buildstream"
+    mkdir -p "${HOME}/.config/buildstream-generate"
+    GIT_SHA="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+    echo "==> Priming BST generated source cache (${ELEMENT})..."
+    podman run --rm \
+        --network=host \
+        --runtime runc \
+        -v "{{justfile_directory()}}:/src:rw" \
+        -v "${HOME}/.cache/buildstream:/root/.cache/buildstream:rw" \
+        -v "${HOME}/.config/buildstream-generate:/root/.config/buildstream-generate:rw" \
+        -w /src \
+        "{{bst2_image}}" \
+        bash -c "bst --no-colors show --deps none --format '%{name}' ${ELEMENT}" \
+        2>/dev/null || true
+
+    echo "==> Generating BST-native SBOM with buildstream-sbom (${ELEMENT} → ${OUTFILE})..."
+    mkdir -p "${HOME}/.cache/pip"
+    podman run --rm \
+        --network=host \
+        --runtime runc \
+        -v "{{justfile_directory()}}:/src:rw" \
+        -v "${HOME}/.cache/buildstream:/root/.cache/buildstream:rw" \
+        -v "${HOME}/.config/buildstream-generate:/root/.config/buildstream-generate:rw" \
+        -v "${HOME}/.cache/pip:/root/.cache/pip:rw" \
+        -w /src \
+        -e ELEMENT="${ELEMENT}" \
+        -e SPDX_NAME="${SPDX_NAME}" \
+        -e OUTFILE="${OUTFILE}" \
+        -e GIT_SHA="${GIT_SHA}" \
+        "{{bst2_image}}" \
+        bash -c '
+            for attempt in 1 2 3; do
+                pip install --quiet \
+                    git+https://gitlab.com/BuildStream/buildstream-sbom.git@0706fec3bedf6f73bd9d2fed32c2aed585feef8d \
+                    && break
+                echo "buildstream-sbom install failed (attempt ${attempt}/3); retrying in 5s..."
+                [ "${attempt}" -lt 3 ] && sleep 5
+            done
+            buildstream-sbom "${ELEMENT}" \
+                --spdx-name "${SPDX_NAME}" \
+                --spdx-namespace "https://github.com/HuntedRaven7/Yutyrannus/sbom/${GIT_SHA}" \
+                --spdx-creator "Tool: buildstream-sbom" \
+                --spdx-creator "Organization: HuntedRaven7" \
+                --deps all \
+                --output "/src/${OUTFILE}"
+        '
+    echo ""
+    echo "==> SBOM written to: $(pwd)/${OUTFILE}"
+    du -sh "${OUTFILE}"
+    echo ""
+    echo "==> Package count:"
+    jq '.packages | length' "${OUTFILE}"
+
+# ── Verify supply-chain signatures ───────────────────────────────────
+[group('test')]
+verify image_ref="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    IMAGE="{{image_ref}}"
+    [ -z "$IMAGE" ] && IMAGE="ghcr.io/robin/yutyrannus-nvidia:latest"
+
+    echo "==> Verifying supply-chain security for: ${IMAGE}"
+    echo ""
+    STATUS=0
+
+    echo "── Cosign signature (keyless / Sigstore OIDC) ──"
+    if ! command -v cosign &>/dev/null; then
+        echo "SKIP: cosign not installed"
+    else
+        cosign verify \
+            --certificate-identity-regexp \
+                '^https://github\.com/HuntedRaven7/Yutyrannus/\.github/workflows/publish\.yml@refs/heads/(main|gh-readonly-queue/main/.+)$' \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "${IMAGE}" && echo "PASS: signature valid" || { echo "FAIL: signature check failed"; STATUS=1; }
+    fi
+    echo ""
+
+    echo "── SBOM OCI referrer ──"
+    if ! command -v oras &>/dev/null; then
+        echo "SKIP: oras not installed"
+    else
+        oras discover "${IMAGE}" && echo "PASS: referrers listed above" || { echo "FAIL: oras discover failed"; STATUS=1; }
+    fi
+    echo ""
+
+    exit "${STATUS}"

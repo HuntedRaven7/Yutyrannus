@@ -1,0 +1,53 @@
+name: Publish Smoke
+
+# Observational smoke must live in a separate workflow. A reusable-workflow call
+# job cannot be marked continue-on-error, so keeping smoke inside publish.yml
+# turns flaky desktop assertions into a red publish pipeline.
+on:
+  workflow_run:
+    workflows: ["Publish Yutyrannus NVIDIA"]
+    types: [completed]
+    branches:
+      - main
+      - 'gh-readonly-queue/main/**'
+      - testing
+      - 'gh-readonly-queue/testing/**'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  wait-for-images:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Verify yutyrannus-nvidia image
+        uses: ./.github/actions/resolve-image-digest
+        with:
+          artifact-name: digest-default
+          image: ghcr.io/${{ github.repository_owner }}/yutyrannus-nvidia
+          build-sha: ${{ github.event.workflow_run.head_sha }}
+          registry-creds: ${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+          verify: 'true'
+
+  smoke:
+    needs: wait-for-images
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Run smoke tests
+        run: |
+          echo "==> Smoke tests would run here against ghcr.io/${{ github.repository_owner }}/yutyrannus-nvidia:${{ github.event.workflow_run.head_sha }}"
+          echo "==> Implement test execution here or via reusable workflow"

@@ -30,24 +30,39 @@ jobs:
       BUILD_GAMING: ${{ matrix.gaming || 'false' }}
     permissions:
       contents: read
+      packages: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@v1
+        uses: HuntedRaven7/actions/bootc-build/setup-runner@v1
         with:
           storage-backend: btrfs
           update-podman: true
           native-overlay: true
           install-tools: '["just"]'
 
+      - name: Restore BuildStream CAS cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/buildstream
+          key: bst-cas-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            bst-cas-${{ runner.os }}-
+
       - name: Build OCI image with BuildStream
         env:
-          BST_FLAGS: -o x86_64_v3 false --no-interactive
+          BST_FLAGS: -o x86_64_v3 false --no-interactive --config /src/buildstream-ci.conf
         run: |
           set -o pipefail
           just bst build --deps none oci/yutyrannus-nvidia.bst
+
+      - name: Save BuildStream CAS cache
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.cache/buildstream
+          key: bst-cas-${{ runner.os }}-${{ github.sha }}
 
       - name: Export and squash OCI image
         env:

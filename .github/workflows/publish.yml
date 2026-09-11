@@ -1,0 +1,363 @@
+name: Publish Yutyrannus NVIDIA
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Existing BuildStream artifact SHA to republish (recovery only)'
+        required: false
+        type: string
+        default: ''
+  workflow_run:
+    workflows: ["Build Yutyrannus NVIDIA"]
+    types: [completed]
+    branches:
+      - main
+      - testing
+      - 'gh-readonly-queue/**'
+
+env:
+  IMAGE_NAME: yutyrannus-nvidia
+  IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+  attestations: write
+  actions: read
+
+concurrency:
+  group: publish-${{ github.event.workflow_run.head_branch || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    runs-on: ubuntu-24.04
+    outputs:
+      sha: ${{ steps.context.outputs.sha }}
+      event: ${{ steps.context.outputs.event }}
+      branch: ${{ steps.context.outputs.branch }}
+      testing_tag: ${{ steps.context.outputs.testing_tag }}
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event != 'pull_request' &&
+       (github.event.workflow_run.head_branch == 'main' ||
+        github.event.workflow_run.head_branch == 'testing' ||
+        startsWith(github.event.workflow_run.head_branch, 'gh-readonly-queue/')))
+    steps:
+      - name: Resolve build SHA and trigger event
+        id: context
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            echo "sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+            echo "event=${{ github.event.workflow_run.event }}" >> "$GITHUB_OUTPUT"
+            BRANCH="${{ github.event.workflow_run.head_branch }}"
+          elif [[ -n "${{ inputs.source_sha }}" ]]; then
+            echo "sha=${{ inputs.source_sha }}" >> "$GITHUB_OUTPUT"
+            echo "event=${{ github.event_name }}" >> "$GITHUB_OUTPUT"
+            BRANCH="${{ github.ref_name }}"
+          else
+            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "event=${{ github.event_name }}" >> "$GITHUB_OUTPUT"
+            BRANCH="${{ github.ref_name }}"
+          fi
+          echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
+          if [[ "$BRANCH" == "testing" ]]; then
+            echo "testing_tag=testing" >> "$GITHUB_OUTPUT"
+          elif [[ "$BRANCH" == "main" ]]; then
+            echo "testing_tag=stable" >> "$GITHUB_OUTPUT"
+          else
+            echo "testing_tag=" >> "$GITHUB_OUTPUT"
+          fi
+
+  publish-image:
+    needs: setup
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    continue-on-error: false
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+
+      - name: Capture build timestamp
+        id: timestamp
+        run: echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup runner
+        uses: HuntedRaven7/actions/bootc-build/setup-runner@v1
+        with:
+          storage-backend: btrfs
+          update-podman: true
+          native-overlay: true
+          install-tools: '["just"]'
+
+      - name: Export OCI image from BuildStream
+        id: export
+        env:
+          BST_FLAGS: -o x86_64_v3 false --no-interactive
+          BUILD_IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          OCI_IMAGE_CREATED: ${{ steps.timestamp.outputs.created }}
+          OCI_IMAGE_REVISION: ${{ needs.setup.outputs.sha }}
+          OCI_IMAGE_VERSION: latest
+        run: just export
+
+      - name: Chunkify image layers
+        env:
+          BUILD_IMAGE_NAME: ${{ env.IMAGE_NAME }}
+        run: just chunkify "localhost/${BUILD_IMAGE_NAME}:latest"
+
+      - name: Validate with bootc container lint
+        env:
+          BUILD_IMAGE_NAME: ${{ env.IMAGE_NAME }}
+        run: just lint
+
+      - name: Audit swap/zram configuration
+        env:
+          BUILD_IMAGE_NAME: ${{ env.IMAGE_NAME }}
+        run: just swap-audit
+
+      - name: Audit user-avatar configuration
+        env:
+          BUILD_IMAGE_NAME: ${{ env.IMAGE_NAME }}
+        run: just avatar-audit
+
+      - name: Login to GHCR
+        env:
+          GH_ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GH_TOKEN" | sudo podman login ghcr.io --username "$GH_ACTOR" --password-stdin
+          mkdir -p ~/.docker
+          echo "$GH_TOKEN" | podman login ghcr.io --username "$GH_ACTOR" --password-stdin \
+            --compat-auth-file ~/.docker/config.json
+
+      - name: Push :${{ needs.setup.outputs.sha }} to GHCR
+        id: push
+        env:
+          BUILD_SHA: ${{ needs.setup.outputs.sha }}
+        run: |
+          LOCAL_IMAGE="${{ env.IMAGE_NAME }}"
+          IMAGE="${{ env.IMAGE_REGISTRY }}/${LOCAL_IMAGE}"
+
+          sudo podman tag "localhost/${LOCAL_IMAGE}:latest" "${IMAGE}:${BUILD_SHA}"
+
+          PUSH_OK=false
+          for attempt in 1 2 3; do
+            sudo podman push --compression-format=zstd \
+              --digestfile /tmp/digest.txt \
+              "${IMAGE}:${BUILD_SHA}" && { PUSH_OK=true; break; }
+            echo "Push attempt ${attempt} failed for :${BUILD_SHA}, retrying in 5s..."
+            [ "$attempt" -lt 3 ] && sleep 5
+          done
+          $PUSH_OK || { echo "ERROR: all push attempts failed for :${BUILD_SHA}"; exit 1; }
+
+          DIGEST=$(cat /tmp/digest.txt)
+          if ! [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "ERROR: malformed digest in digestfile: '${DIGEST}'"
+            exit 1
+          fi
+
+          for attempt in $(seq 1 18); do
+            if skopeo inspect --no-tags \
+                "docker://${IMAGE}@${DIGEST}" > /dev/null 2>&1; then
+              echo "Anonymous tag :${BUILD_SHA} visible (attempt ${attempt})"
+              break
+            fi
+            if [ "$attempt" -eq 18 ]; then
+              echo "::warning::GHCR has not exposed :${BUILD_SHA} anonymously after 3 min; continuing"
+            fi
+            sleep 10
+          done
+
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+
+      - name: Install oras
+        uses: oras-project/setup-oras@v2
+
+      - name: Sign image (cosign keyless)
+        run: |
+          cosign sign --yes \
+            "${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.push.outputs.digest }}"
+
+      - name: Write digest artifact
+        env:
+          BUILD_SHA: ${{ needs.setup.outputs.sha }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/digest-artifact"
+          jq -n \
+            --arg variant "default" \
+            --arg image   "${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}" \
+            --arg sha     "${BUILD_SHA}" \
+            --arg digest  "${{ steps.push.outputs.digest }}" \
+            --arg created "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{schema: 1, variant: $variant, image: $image, sha: $sha, digest: $digest, created: $created}' \
+            > "${RUNNER_TEMP}/digest-artifact/digest.json"
+
+      - name: Upload digest artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: digest-default
+          path: ${{ runner.temp }}/digest-artifact/digest.json
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: publish-logs-${{ env.IMAGE_NAME }}
+          path: logs/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  publish-sbom:
+    needs: [setup, publish-image]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    continue-on-error: true
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+
+      - name: Setup runner
+        uses: HuntedRaven7/actions/bootc-build/setup-runner@v1
+        with:
+          storage-backend: btrfs
+          update-podman: true
+          native-overlay: true
+          install-tools: '["just"]'
+
+      - name: Restore pip cache for buildstream-sbom
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/pip
+          key: pip-sbom-0706fec3bedf6f73bd9d2fed32c2aed585feef8d
+          restore-keys: pip-sbom-
+
+      - name: Generate SBOM
+        env:
+          BST_FLAGS: -o x86_64_v3 false --no-interactive
+        run: just sbom
+
+      - name: Upload SBOM artifact
+        run: cp yutyrannus-nvidia.spdx.json yutyrannus-nvidia.sbom.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sbom-yutyrannus-nvidia
+          path: yutyrannus-nvidia.sbom.json
+          retention-days: 30
+
+      - name: Login to GHCR
+        env:
+          GH_ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p ~/.docker
+          echo "$GH_TOKEN" | podman login ghcr.io --username "$GH_ACTOR" --password-stdin \
+            --compat-auth-file ~/.docker/config.json
+
+      - name: Install oras
+        uses: oras-project/setup-oras@v2
+
+      - name: Resolve image digest
+        id: digest
+        uses: ./.github/actions/resolve-image-digest
+        with:
+          artifact-name: digest-default
+          image: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
+          build-sha: ${{ needs.setup.outputs.sha }}
+          registry-creds: ${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}
+
+      - name: Attach SBOM
+        id: sbom-attach
+        env:
+          DIGEST: ${{ steps.digest.outputs.digest }}
+        run: |
+          set -o pipefail
+          SBOM_DIGEST=$(oras attach \
+            --artifact-type application/vnd.spdx+json \
+            --format json \
+            "${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}@${DIGEST}" \
+            yutyrannus-nvidia.spdx.json:application/vnd.spdx+json \
+            | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['digest'])")
+          if [[ -z "$SBOM_DIGEST" || "$SBOM_DIGEST" == "None" ]]; then
+            echo "ERROR: Failed to capture SBOM digest from oras attach"
+            exit 1
+          fi
+          echo "sbom_digest=${SBOM_DIGEST}" >> "$GITHUB_OUTPUT"
+
+      - name: Sign SBOM
+        env:
+          SBOM_DIGEST: ${{ steps.sbom-attach.outputs.sbom_digest }}
+        run: |
+          cosign sign -y \
+            "${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}@${SBOM_DIGEST}"
+
+  promote:
+    needs: [setup, publish-image]
+    if: >-
+      needs.publish-image.result == 'success' &&
+      needs.setup.outputs.testing_tag != '' &&
+      github.event_name == 'workflow_run'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      packages: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Resolve source digest
+        id: digest
+        uses: ./.github/actions/resolve-image-digest
+        with:
+          artifact-name: digest-default
+          image: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
+          build-sha: ${{ needs.setup.outputs.sha }}
+          registry-creds: ${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}
+
+      - name: Promote :${{ needs.setup.outputs.sha }} to :${{ needs.setup.outputs.testing_tag }}
+        env:
+          TESTING_TAG: ${{ needs.setup.outputs.testing_tag }}
+          GH_ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DIGEST: ${{ steps.digest.outputs.digest }}
+        run: |
+          IMAGE="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}"
+          PUSH_OK=false
+          for attempt in 1 2 3; do
+            skopeo copy \
+              --preserve-digests \
+              --src-creds "$GH_ACTOR:$GH_TOKEN" \
+              --dest-creds "$GH_ACTOR:$GH_TOKEN" \
+              "docker://${IMAGE}@${DIGEST}" \
+              "docker://${IMAGE}:${TESTING_TAG}" && { PUSH_OK=true; break; }
+            echo "skopeo copy attempt ${attempt} failed for :${TESTING_TAG}, retrying in 5s..."
+            [ "$attempt" -lt 3 ] && sleep 5
+          done
+          $PUSH_OK || { echo "ERROR: all copy attempts failed for :${TESTING_TAG}"; exit 1; }
+
+          PROMOTED=$(skopeo inspect --no-tags --creds "$GH_ACTOR:$GH_TOKEN" \
+            "docker://${IMAGE}:${TESTING_TAG}" | jq -r '.Digest')
+          if [ "$PROMOTED" != "$DIGEST" ]; then
+            echo "ERROR: :${TESTING_TAG} points at ${PROMOTED}, expected ${DIGEST}"
+            exit 1
+          fi

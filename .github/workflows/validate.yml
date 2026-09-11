@@ -1,0 +1,63 @@
+name: Validate
+
+on:
+  pull_request:
+    branches: [testing, main]
+    # "edited" fires when a PR's base branch changes. Without it, a PR
+    # opened against one branch and retargeted here merges without ever
+    # re-running validation against the new base (see #1386).
+    types: [opened, synchronize, reopened, edited]
+  merge_group:
+    branches: [testing, main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    concurrency:
+      group: validate-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup Just
+        uses: taiki-e/install-action@c3ec0de9ae7f1019cea21aa96aa0a895b9552063 # v2
+        with:
+          tool: just
+
+      - name: Validate publish workflow and composite actions
+        run: just check-publish-workflow
+
+      - name: Restore BST cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/buildstream
+          key: bst-show-${{ github.base_ref || github.ref_name }}-${{ hashFiles('elements/gnome-build-meta.bst', 'elements/freedesktop-sdk.bst', 'Justfile') }}
+          restore-keys: |
+            bst-show-${{ github.base_ref || github.ref_name }}-
+            bst-show-
+
+      - name: Check for dangling submodules
+        run: |
+          if git ls-files --stage | grep -q '^160000'; then
+            echo "ERROR: dangling gitlink(s) found — no submodules allowed in this repo"
+            git ls-files --stage | grep '^160000'
+            exit 1
+          fi
+
+      - name: Check freedesktop-sdk patch drift
+        run: just patch-drift-check
+
+      - name: Validate BST element graph (default)
+        env:
+          BST_FLAGS: -o x86_64_v3 false --no-interactive
+        run: just bst show --deps all oci/yutyrannus-nvidia.bst
+
+      - name: Validate BST element graph (nvidia)
+        env:
+          BST_FLAGS: -o x86_64_v3 false --no-interactive
+        run: just bst show --deps all oci/yutyrannus-nvidia.bst
