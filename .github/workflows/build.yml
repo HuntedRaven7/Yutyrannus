@@ -1,0 +1,63 @@
+name: Build Yutyrannus NVIDIA
+
+on:
+  push:
+    branches: [testing, main]
+    paths:
+      - "elements/**"
+      - "patches/**"
+      - "Justfile"
+      - "project.conf"
+      - "include/**"
+  schedule:
+    - cron: "0 13 * * *"
+  workflow_dispatch:
+
+permissions: read-all
+
+env:
+  IMAGE_NAME: yutyrannus-nvidia
+
+concurrency:
+  group: yutyrannus-bst-build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    env:
+      BUILD_GAMING: ${{ matrix.gaming || 'false' }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup runner
+        uses: projectbluefin/actions/bootc-build/setup-runner@v1
+        with:
+          storage-backend: btrfs
+          update-podman: true
+          native-overlay: true
+          install-tools: '["just"]'
+
+      - name: Build OCI image with BuildStream
+        env:
+          BST_FLAGS: -o x86_64_v3 false --no-interactive
+        run: |
+          set -o pipefail
+          just bst build --deps none oci/yutyrannus-nvidia.bst
+
+      - name: Export and squash OCI image
+        env:
+          BST_FLAGS: -o x86_64_v3 false --no-interactive
+        run: |
+          just export
+
+      - name: Push to registry
+        if: github.event_name != 'schedule' || github.ref == 'refs/heads/testing'
+        env:
+          IMAGE_TAG: ${{ github.ref == 'refs/heads/main' && 'stable' || 'testing' }}
+        run: |
+          just push-local ghcr.io/${{ github.repository_owner }}

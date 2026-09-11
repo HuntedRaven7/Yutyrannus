@@ -1,0 +1,14 @@
+# Dakota keybinding overrides
+# bluefin-common's 02-bluefin-keybindings sets custom0/custom1 to /usr/bin/ptyxis
+# which is not installed in dakota. Override to use xdg-terminal-exec (Ghostty).
+# See: https://github.com/projectbluefin/common/pull/265
+
+[org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0]
+binding='<Control><Alt>t'
+command='/usr/bin/xdg-terminal-exec'
+name='Terminal'
+
+[org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1]
+binding='<Control><Alt>Return'
+command='/usr/bin/xdg-terminal-exec'
+name='Terminal Alt'

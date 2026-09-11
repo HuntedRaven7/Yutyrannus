@@ -1,0 +1,12 @@
+[Unit]
+Description=Set systemd-boot menu timeout
+ConditionPathExists=!/var/lib/ublue-os/boot-timeout-set
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'bootctl set-timeout 5 && mkdir -p /var/lib/ublue-os && touch /var/lib/ublue-os/boot-timeout-set'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

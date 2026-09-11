@@ -1,0 +1,6 @@
+paths:
+  # build-aarch64 is intentionally disabled while webkit cold-builds OOM/timeout
+  # the ARM runner. Re-enable once webkit artifacts are cached in cache.projectbluefin.io.
+  .github/workflows/build.yml:
+    ignore:
+      - 'constant expression .+ in condition'

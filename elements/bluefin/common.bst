@@ -1,0 +1,147 @@
+kind: manual
+
+sources:
+- kind: git_repo
+  url: github:projectbluefin/common.git
+  track: main
+  # Includes the external-chairlift-v1 handoff API; install.sh checks it.
+  ref: v2026.08-99-g5cb020bf868d5502cceb9ecd11ff859dd3a6c6e3
+# Consume common's fastfetch layout directly; only adapt the install-date input.
+# Drop this patch once common provides a shared install-date helper.
+- kind: patch
+  path: patches/common/0001-fastfetch-install-date.patch
+# Dakota uses Ghostty as primary terminal: enable dual-theme to track GNOME Dark/Light style.
+# Drop this patch once common ships dual-theme by default.
+- kind: patch
+  path: patches/common/0002-ghostty-dual-theme.patch
+- kind: git_module
+  url: github:projectbluefin/branding/
+  path: bluefin-branding
+  ref: f5213ca61615bb79a8315fc4c5378a80ca93922e
+- kind: local
+  path: files/wallpaper-month
+# Image-owned integration for the Bluefin Homebrew cask; no privileged
+# helper is installed from the user-writable Brew prefix.
+- kind: git_repo
+  url: github:projectbluefin/chairlift.git
+  track: v0.12.2
+  ref: 5e92e9bd6b24d641cabcff84d079f45532ca94ae
+  directory: chairlift-upstream
+- kind: local
+  path: files/chairlift
+  directory: yutyrannus-chairlift
+
+build-depends:
+- core/sandbox-tools.bst
+- gnome-build-meta.bst:gnomeos-deps/just.bst
+
+depends:
+- freedesktop-sdk.bst:public-stacks/runtime-minimal.bst
+- freedesktop-sdk.bst:components/sed.bst
+
+public:
+  bst:
+    overlap-whitelist:
+    - /etc/environment
+    - /etc/containers/policy.json
+    - /usr/share/pixmaps/gnome-boot-logo.png
+
+variables:
+  strip-binaries: ""
+
+config:
+  install-commands:
+    #   - install -Dm644 -t "%{install-root}%{sysconfdir}/" etc/*
+    #   - install -Dm644 -t "%{install-root}%{sysconfdir}/" etc/*
+  - |
+    sed -i "s#file:///usr/share/backgrounds/bluefin/12-bluefin.xml#file:///var/lib/ublue-os/current-bluefin.xml#g" "system_files/bluefin/usr/share/glib-2.0/schemas/zz0-bluefin-modifications.gschema.override"
+
+    # The /var/home/linuxbrew spelling breaks Homebrew's bottle-prefix
+    # detection on Dakota's real /home; common respelled everything to
+    # /home/linuxbrew in projectbluefin/common#997. Guard against the bad
+    # spelling regressing upstream (.agents/skills/dakota-workstation/references/host-homebrew.md).
+    if grep -rl "/var/home/linuxbrew" system_files/shared system_files/bluefin; then
+      echo "ERROR: /var/home/linuxbrew references above break brew bottle-prefix detection — fix them in projectbluefin/common" >&2
+      exit 1
+    fi
+
+    # Dakota-only: make fastfetch's image line show the real stream tag.
+    # Unprivileged `bootc status` requires root on bootc >= 1.14, so the
+    # script's bootc fallback is dead in user sessions — and Dakota's baked
+    # image-tag is always "latest" because promotion retags the same digest
+    # (unlike Bluefin/LTS/Aurora, which bake the tag per-stream build).
+    # ublue-booted-image.service (bluefin/firstboot-date.bst) records the
+    # booted ref in /run/ublue-os/booted-image at boot; teach the script to
+    # prefer it. Guard so an upstream rewrite of the script fails loudly
+    # here instead of silently shipping an unpatched fastfetch.
+    # NB: the build sandbox has only bash + coreutils + sed (no grep/awk) —
+    # see core/sandbox-tools.bst — so guard and patch are sed/wc based.
+    IMG_INFO="system_files/shared/usr/bin/ublue-image-info.sh"
+    if [ "$(sed -n '/\.status\.booted\.image\.image\.image/p' "$IMG_INFO" | wc -l)" != 1 ]; then
+      echo "ERROR: ublue-image-info.sh changed upstream — re-fit the booted-image patch (see ublue-booted-image.service)" >&2
+      exit 1
+    fi
+    sed -i '/\.status\.booted\.image\.image\.image/a \
+    \
+    # Dakota: prefer the boot-time snapshot written by ublue-booted-image.service.\
+    # Unprivileged bootc status fails on bootc >= 1.14, so the query above is dead\
+    # in user sessions, and the baked Dakota tag is always "latest".\
+    if [[ -r /run/ublue-os/booted-image ]]; then\
+    \tread -r BOOTED_REF < /run/ublue-os/booted-image\
+    fi' "$IMG_INFO"
+
+    cp -r system_files/bluefin/usr/./ "%{install-root}%{prefix}/"
+    cp -r system_files/shared/usr/./ "%{install-root}%{prefix}/"
+    cp -r system_files/bluefin/etc/./ "%{install-root}%{sysconfdir}/"
+    cp -r system_files/shared/etc/./ "%{install-root}%{sysconfdir}/"
+    cp -r bluefin-branding/system_files/etc/./ "%{install-root}%{sysconfdir}/"
+
+    # Default Bluefin shell MOTD to disabled, while allowing user overrides.
+    install -Dm644 /dev/null "%{install-root}%{sysconfdir}/profile.d/bluefin-shell-defaults.sh"
+    cat > "%{install-root}%{sysconfdir}/profile.d/bluefin-shell-defaults.sh" <<'EOF'
+    : "${BLUEFIN_SHELL_ENABLE_MOTD:=0}"
+    export BLUEFIN_SHELL_ENABLE_MOTD
+    EOF
+
+    # Generate ujust completions to match the upstream common image.
+    install -d \
+      "%{install-root}%{datadir}/bash-completion/completions" \
+      "%{install-root}%{datadir}/zsh/site-functions" \
+      "%{install-root}%{datadir}/fish/vendor_completions.d"
+    just --completions bash | sed -E 's/([\(_" ])just/\1ujust/g' > "%{install-root}%{datadir}/bash-completion/completions/ujust"
+    just --completions zsh | sed -E 's/([\(_" ])just/\1ujust/g' > "%{install-root}%{datadir}/zsh/site-functions/_ujust"
+    just --completions fish | sed -E 's/([\(_" ])just/\1ujust/g' > "%{install-root}%{datadir}/fish/vendor_completions.d/ujust.fish"
+
+    # Map Bluefin icons to GNOME OS expected names
+    # About dialog (gnome-control-center reads LOGO=img-logo-icon from os-release,
+    # then looks for img-logo-icon-text-dark, img-logo-icon-text, img-logo-icon-dark, img-logo-icon)
+    cp "%{install-root}%{datadir}/pixmaps/fedora-logo-icon.png" "%{install-root}%{datadir}/pixmaps/img-logo-icon.png"
+    cp "%{install-root}%{datadir}/pixmaps/fedora-logo-icon.png" "%{install-root}%{datadir}/pixmaps/img-logo-icon-dark.png"
+    # Override GNOME OS boot logo with Bluefin branding
+    cp "%{install-root}%{datadir}/pixmaps/fedora-gdm-logo.png" "%{install-root}%{datadir}/pixmaps/gnome-boot-logo.png"
+    install -Dm755 bluefin-wallpaper-month-sync "%{install-root}%{prefix}/libexec/bluefin-wallpaper-month-sync"
+    install -Dm644 bluefin-wallpaper-month.service "%{install-root}%{prefix}/lib/systemd/system/bluefin-wallpaper-month.service"
+    mkdir -p "%{install-root}%{prefix}/lib/systemd/system/multi-user.target.wants"
+    ln -sfn ../bluefin-wallpaper-month.service "%{install-root}%{prefix}/lib/systemd/system/multi-user.target.wants/bluefin-wallpaper-month.service"
+
+    # Create dconf profile so the distro system database is read
+    mkdir -p "%{install-root}%{sysconfdir}/dconf/profile"
+    printf 'user-db:user\nsystem-db:distro\n' > "%{install-root}%{sysconfdir}/dconf/profile/user"
+
+    # Dakota is a fresh BuildStream image — users never migrate from legacy-rechunk.
+    # Remove the rechunker-group-fix migration aid that common ships for Bluefin/LTS.
+    rm -f "%{install-root}%{prefix}/bin/rechunker-group-fix"
+    rm -f "%{install-root}%{prefix}/lib/systemd/system/rechunker-group-fix.service"
+    rm -f "%{install-root}%{prefix}/lib/systemd/system-preset/00-rechunker-group-fix.preset"
+
+    # Dakota uses its own ublue-motd (from motd.bst) with a double-display guard.
+    # Remove common's umotd.sh hook to prevent dual MOTD on every login.
+    rm -f "%{install-root}%{sysconfdir}/profile.d/umotd.sh"
+
+    # Replace common's legacy Frostyard declaration and integration, with
+    # a guarded preinstall migration for the persistent Homebrew prefix.
+    bash yutyrannus-chairlift/install.sh "%{install-root}"
+
+    # Add BudsLink to default system flatpaks
+    echo 'flatpak "io.github.maniacx.BudsLink"' >> "%{install-root}%{datadir}/ublue-os/homebrew/system-flatpaks.Brewfile"
+  - "%{install-extra}"

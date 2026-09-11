@@ -1,0 +1,29 @@
+# Ignore Python local cache across repo
+**/__pycache__/
+
+# Debug session artifacts
+debug-session/
+
+# Ignore BuildStream local state
+.bst
+.bst2
+.cache/*
+
+*.img
+*.raw
+*.tar
+.ovmf-vars.fd
+.build-out
+
+# Local AI agent state (opencode sessions, drafts)
+# Skills are committed; everything else is ignored
+.opencode/*
+!.opencode/skills/
+
+# Git worktrees
+.worktrees/
+files/filemap.json
+files/fakecap-manifest.tsv
+files/xattr-db/
+files/fakecap/fakecap-restore
+files/fakecap/fakecap.so

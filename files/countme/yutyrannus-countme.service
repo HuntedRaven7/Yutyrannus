@@ -1,0 +1,12 @@
+[Unit]
+Description=Weekly Yutyrannus countme report to Fedora infrastructure
+Documentation=https://github.com/robin/yutyrannus
+After=network-online.target
+Wants=network-online.target
+# Requires ostree-booted — we need /run/ostree-booted to reliably track installs
+ConditionPathExists=/run/ostree-booted
+ConditionPathExists=!/etc/yutyrannus-countme-opt-out
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/yutyrannus-countme

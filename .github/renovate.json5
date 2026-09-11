@@ -1,0 +1,43 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "local>projectbluefin/renovate-config:org-inherited-config"
+  ],
+  // Renovate targets the testing staging branch. PRs land on testing first,
+  // are built and validated, then the promote-testing-to-main workflow opens a
+  // squash PR to advance main (triggering :stable promotion). This matches the
+  // bluefin/bluefin-lts model. Renovate PRs targeting testing are explicitly
+  // exempted from the "must target main" gate in pr-triage.yml.
+  // Note: track-bst-sources.yml manages BuildStream refs directly and
+  // intentionally targets main — it is not Renovate-managed.
+  "baseBranchPatterns": ["testing"],
+  "branchPrefix": "renovate/",
+
+  // Limit Renovate to GitHub Actions and workflow image refs.
+  // BuildStream sources are tracked separately by track-bst-sources.yml.
+  "enabledManagers": ["github-actions"],
+
+  "packageRules": [
+    {
+      "description": "Automerge digest/pin/patch/minor when CI passes",
+      "matchUpdateTypes": ["digest", "pin", "patch", "minor"],
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash",
+      "labels": ["chore/deps", "automerge"]
+    },
+    {
+      "description": "Pin all GitHub Actions to full SHA digests",
+      "matchManagers": ["github-actions"],
+      "matchDepTypes": ["action"],
+      "pinDigests": true
+    },
+    {
+      // All projectbluefin/* actions are org-managed — @v1 tags or @main are
+      // intentional. Renovate must not touch them.
+      "matchDepNames": ["/^projectbluefin\\//"],
+      "enabled": false,
+      "pinDigests": false
+    }
+  ]
+}
