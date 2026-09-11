@@ -34,3 +34,8 @@ config:
 
     plugins/buildstream-plugins.bst: plugins/buildstream-plugins.bst
     plugins/buildstream-plugins-community.bst: plugins/buildstream-plugins-community.bst
+
+    # gnome-build-meta jobserver-pool.bst depends on public-stacks/runtime-gnu.bst,
+    # which was removed from freedesktop-sdk. Use a local override that depends
+    # on runtime-minimal.bst instead.
+    buildsystems/jobserver-pool.bst: buildsystems/jobserver-pool.bst
