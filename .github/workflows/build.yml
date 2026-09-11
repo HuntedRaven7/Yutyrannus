@@ -30,7 +30,6 @@ jobs:
       BUILD_GAMING: ${{ matrix.gaming || 'false' }}
     permissions:
       contents: read
-      packages: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -69,10 +68,3 @@ jobs:
           BST_FLAGS: -o x86_64_v3 false --no-interactive
         run: |
           just export
-
-      - name: Push to registry
-        if: github.event_name != 'schedule' || github.ref == 'refs/heads/testing'
-        env:
-          IMAGE_TAG: ${{ github.ref == 'refs/heads/main' && 'stable' || 'testing' }}
-        run: |
-          just push-local ghcr.io/${{ github.repository_owner }}
