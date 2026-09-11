@@ -66,3 +66,7 @@ config:
     (?):
     - gaming == true:
         components/linux.bst: core/linux-ogc.bst
+
+    # gnome-build-meta depends on public-stacks/runtime-gnu.bst, which was
+    # removed from freedesktop-sdk. Map it to our local runtime-gnu.bst.
+    public-stacks/runtime-gnu.bst: public-stacks/runtime-gnu.bst
