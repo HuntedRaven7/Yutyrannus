@@ -16,8 +16,6 @@ config:
         x86_64_v3: true
 
   overrides:
-    freedesktop-sdk.bst: freedesktop-sdk.bst
-
     components/linux.bst: core/linux-mainline.bst
     (?):
     - gaming == true:
