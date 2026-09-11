@@ -52,7 +52,7 @@ jobs:
 
       - name: Build OCI image with BuildStream
         env:
-          BST_FLAGS: -o x86_64_v3 false --no-interactive --config /src/buildstream-ci.conf
+          BST_FLAGS: -o x86_64_v3 true --no-interactive --config /src/buildstream-ci.conf
         run: |
           set -o pipefail
           just bst build --deps none oci/yutyrannus-nvidia.bst
@@ -65,6 +65,6 @@ jobs:
 
       - name: Export and squash OCI image
         env:
-          BST_FLAGS: -o x86_64_v3 false --no-interactive
+          BST_FLAGS: -o x86_64_v3 true --no-interactive
         run: |
           just export

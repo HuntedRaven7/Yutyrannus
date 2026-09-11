@@ -27,7 +27,7 @@ bst *ARGS:
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "${HOME}/.cache/buildstream"
-    DEFAULT_BST_FLAGS="-o x86_64_v3 false --no-interactive"
+    DEFAULT_BST_FLAGS="-o x86_64_v3 true --no-interactive"
     if [ -n "${BST_FLAGS_OVERRIDE:-}" ]; then
         EFFECTIVE_BST_FLAGS="${BST_FLAGS_OVERRIDE}"
     else
