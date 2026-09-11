@@ -94,7 +94,7 @@ jobs:
         run: echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
       - name: Setup runner
-        uses: HuntedRaven7/actions/bootc-build/setup-runner@v1
+        uses: projectbluefin/actions/bootc-build/setup-runner@v1
         with:
           storage-backend: btrfs
           update-podman: true
@@ -237,7 +237,7 @@ jobs:
           ref: ${{ needs.setup.outputs.sha }}
 
       - name: Setup runner
-        uses: HuntedRaven7/actions/bootc-build/setup-runner@v1
+        uses: projectbluefin/actions/bootc-build/setup-runner@v1
         with:
           storage-backend: btrfs
           update-podman: true
