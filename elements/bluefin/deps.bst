@@ -75,7 +75,7 @@ depends:
   - freedesktop-sdk.bst:components/skopeo.bst
   - freedesktop-sdk.bst:components/flatpak-builder.bst
 
-  - freedesktop-sdk.bst:components/bpf.bst
+  - freedesktop-sdk.bst:components/_private/bpf.bst
   - freedesktop-sdk.bst:components/vmlinuxh.bst
   - gnome-build-meta.bst:gnomeos-deps/bpftop.bst
   - gnome-build-meta.bst:core/sysprof-app.bst

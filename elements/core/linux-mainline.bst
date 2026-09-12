@@ -180,7 +180,7 @@ sources:
 - kind: git_repo
   url: kernel:linux/kernel/git/torvalds/linux.git
   track: v7.3-rc2
-  ref: v7.3-rc2
+  ref: df2908090cda368b01ff43709f51890076c56157
 - kind: local
   path: files/linux/config-utils.sh
 - kind: local

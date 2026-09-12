@@ -24,6 +24,6 @@ config:
 
       [org.gnome.shell.extensions.BudsLink-Companion]
       level-indicator-color=0
-EOF
+      EOF
 
     - "%{install-extra}"

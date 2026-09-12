@@ -2,11 +2,5 @@ kind: junction
 
 sources:
 - kind: tar
-  url: pypi:source/b/buildstream-plugins/buildstream-plugins-2.5.0.tar.gz
-  ref: 49c57dec88c0b4558f474520c2e29c69ecd42a1e5c07423baae5b29b153e54a6
-# apache/buildstream-plugins#91 (open upstream): the docker source only
-# accepts Docker v2 media types, so registries serving OCI manifests
-# (ghcr.io, used by bluefin/brew-tarball.bst) 404 on fetch. Drop the patch
-# when the PR merges and the junction moves to a release containing it.
-- kind: patch_queue
-  path: patches/buildstream-plugins
+  url: pypi:c5/d3/834009a27e8542c77208c7b1b8b9a8dbc6788da3fc755dbbb2312b37e378/buildstream_plugins-2.8.0.tar.gz
+  ref: 158f9dfe7936f5e7758af3ccc689fda8a9a0673538f0b14100874d6d83b1300a
