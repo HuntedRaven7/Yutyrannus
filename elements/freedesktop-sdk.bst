@@ -11,6 +11,7 @@ sources:
 config:
   overrides:
     components/linux.bst: core/linux-mainline.bst
+    components/glib.bst: gnome-build-meta.bst:sdk/glib.bst
     (?):
     - gaming == true:
         components/linux.bst: core/linux-ogc.bst

@@ -3,12 +3,17 @@ kind: script
 build-depends:
   - gnome-build-meta.bst:freedesktop-sdk.bst:components/fakecap.bst
   - gnome-build-meta.bst:freedesktop-sdk.bst:components/oci-builder.bst
-  - freedesktop-sdk.bst:components/glib.bst
+  - gnome-build-meta.bst:sdk/glib.bst
   - gnome-build-meta.bst:core-deps/dconf.bst
   - gnome-build-meta.bst:freedesktop-sdk.bst:vm/prepare-image.bst
   - filename: oci/layers/yutyrannus-nvidia.bst
     config:
       location: /layer
+
+public:
+  bst:
+    overlap-whitelist:
+    - /usr/share/locale/*/LC_MESSAGES/glib20.mo
 
 environment:
   LD_PRELOAD: /usr/libexec/fakecap/fakecap.so

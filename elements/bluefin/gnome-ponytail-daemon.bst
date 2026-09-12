@@ -17,6 +17,6 @@ build-depends:
 
 depends:
 - freedesktop-sdk.bst:public-stacks/runtime-minimal.bst
-- freedesktop-sdk.bst:components/glib.bst
+- gnome-build-meta.bst:sdk/glib.bst
 - freedesktop-sdk.bst:components/libei.bst
 - freedesktop-sdk.bst:components/libxkbcommon.bst

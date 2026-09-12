@@ -12,10 +12,10 @@
 
 ```bash
 # Install the stable image
-sudo bootc switch ghcr.io/robin/yutyrannus-nvidia:stable
+sudo bootc switch ghcr.io/huntedraven7/yutyrannus-nvidia:stable
 
 # Or switch to testing
-sudo bootc switch ghcr.io/robin/yutyrannus-nvidia:testing
+sudo bootc switch ghcr.io/huntedraven7/yutyrannus-nvidia:testing
 ```
 
 ## Desktop Environment
@@ -44,7 +44,7 @@ sudo bootc switch ghcr.io/robin/yutyrannus-nvidia:testing
 
 ## Auto-Login
 
-GDM auto-login for the first-boot user created by the installer (Omarchy-style). A oneshot systemd service detects the first non-root user (UID 1000-60000) and configures GDM auto-login before `gdm.service` starts.
+GDM auto-login for the first-boot user created by the installer. A oneshot systemd service detects the first non-root user (UID 1000-60000) and configures GDM auto-login before `gdm.service` starts.
 
 ## Kernel
 

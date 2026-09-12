@@ -45,6 +45,30 @@ public:
     - /etc/environment
     - /etc/containers/policy.json
     - /usr/share/pixmaps/gnome-boot-logo.png
+    - /usr/share/locale/*/LC_MESSAGES/glib20.mo
+    - /usr/include/glib-2.0/**
+    - /usr/lib/x86_64-linux-gnu/glib-2.0/**
+    - /usr/lib/x86_64-linux-gnu/libg*.so*
+    - /usr/lib/x86_64-linux-gnu/libgirepository*.so*
+    - /usr/lib/x86_64-linux-gnu/libgio*.so*
+    - /usr/lib/x86_64-linux-gnu/libgmodule*.so*
+    - /usr/lib/x86_64-linux-gnu/libgobject*.so*
+    - /usr/lib/x86_64-linux-gnu/libgthread*.so*
+    - /usr/lib/x86_64-linux-gnu/pkgconfig/glib*.pc
+    - /usr/lib/x86_64-linux-gnu/pkgconfig/gmodule*.pc
+    - /usr/lib/x86_64-linux-gnu/pkgconfig/gobject*.pc
+    - /usr/lib/x86_64-linux-gnu/pkgconfig/gio*.pc
+    - /usr/share/aclocal/glib*.m4
+    - /usr/share/aclocal/gsettings.m4
+    - /usr/share/bash-completion/completions/g*
+    - /usr/share/gir-1.0/GLib*.gir
+    - /usr/share/gir-1.0/GObject*.gir
+    - /usr/share/gir-1.0/Gio*.gir
+    - /usr/share/gir-1.0/GModule*.gir
+    - /usr/share/glib-2.0/**
+    - /usr/share/gettext/its/gschema*
+    - /usr/share/glib-2.0/schemas/gschema.dtd
+    - /usr/libexec/gio-launch-desktop
 
 variables:
   strip-binaries: ""
