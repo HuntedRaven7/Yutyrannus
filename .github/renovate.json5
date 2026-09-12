@@ -40,7 +40,7 @@
       "pinDigests": false
     },
     {
-      "description": "Track Niri WM upstream releases",
+      "description": "Track Mango WM upstream releases",
       "matchManagers": ["regex"],
       "matchFileNames": ["elements/bluefin/niri.bst"],
       "enabled": true
@@ -118,9 +118,9 @@
     {
       "fileMatch": ["elements/bluefin/niri.bst"],
       "matchStrings": [
-        'url:\\s+niri_releases:(?<version>v[0-9.]+)/niri-(?<version>[0-9.]+)\\.tar\\.gz'
+        'url:\\s+mango_releases:v(?<version>[0-9.]+)/mango-(?<version>[0-9.]+)\\.tar\\.gz'
       ],
-      "depNameTemplate": "niri-wm/niri",
+      "depNameTemplate": "mangowm/mango",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
     },

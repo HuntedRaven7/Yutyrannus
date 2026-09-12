@@ -1,6 +1,6 @@
 [Desktop Entry]
-Name=Niri
-Comment=Niri compositor
-Exec=niri-session
+Name=Mango
+Comment=Mango compositor
+Exec=mango
 Type=Application
-DesktopNames=Niri
+DesktopNames=Mango
