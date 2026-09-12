@@ -1,0 +1,12 @@
+[Unit]
+Description=Configure GDM auto-login for first-boot user
+Before=gdm.service
+ConditionPathExists=!/etc/.yutyrannus-autologin-configured
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/yutyrannus-gdm-autologin.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

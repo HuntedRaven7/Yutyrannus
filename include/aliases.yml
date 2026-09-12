@@ -20,6 +20,20 @@ aliases:
   fedora_rpms: https://src.fedoraproject.org/rpms/
   ghostty_deps: https://deps.files.ghostty.org/
   ghostty_releases: https://release.files.ghostty.org/
+  niri_releases: https://github.com/niri-wm/niri/releases/download/
+  quickshell_releases: https://github.com/quickshell-mirror/quickshell/releases/download/
+  grim_releases: https://github.com/GrimAnticheat/Grim/releases/download/
+  bluetui_releases: https://github.com/pythops/bluetui/releases/download/
+  rofi_releases: https://github.com/davatorium/rofi/releases/download/
+  swaync_releases: https://github.com/ErikReider/SwayNotificationCenter/releases/download/
+  swww_releases: https://github.com/HorusView/swww/releases/download/
+  wlogout_releases: https://github.com/ArtsyMacaw/wlogout/releases/download/
+  yazi_releases: https://github.com/sxyazi/yazi/releases/download/
+  fzf_releases: https://github.com/junegunn/fzf/releases/download/
+  zoxide_releases: https://github.com/ajeetdsouza/zoxide/releases/download/
+  brightnessctl_releases: https://github.com/Hummer12007/brightnessctl/releases/download/
+  playerctl_releases: https://github.com/altdesktop/playerctl/releases/download/
+  qt_downloads: https://download.qt.io/official_releases/qt/
   onepassword_cli: https://cache.agilebits.com/dist/1P/op2/pkg/
   onepassword_files: https://downloads.1password.com/
 

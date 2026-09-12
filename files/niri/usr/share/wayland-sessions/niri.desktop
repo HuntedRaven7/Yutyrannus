@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Niri
+Comment=Niri compositor
+Exec=niri-session
+Type=Application
+DesktopNames=Niri

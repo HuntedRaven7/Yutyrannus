@@ -15,7 +15,7 @@
 
   // Limit Renovate to GitHub Actions and workflow image refs.
   // BuildStream sources are tracked separately by track-bst-sources.yml.
-  "enabledManagers": ["github-actions"],
+  "enabledManagers": ["github-actions", "regex"],
 
   "packageRules": [
     {
@@ -38,6 +38,191 @@
       "matchDepNames": ["/^projectbluefin\\//"],
       "enabled": false,
       "pinDigests": false
+    },
+    {
+      "description": "Track Niri WM upstream releases",
+      "matchManagers": ["regex"],
+      "matchFileNames": ["elements/bluefin/niri.bst"],
+      "enabled": true
+    },
+    {
+      "description": "Track Quickshell upstream releases",
+      "matchManagers": ["regex"],
+      "matchFileNames": ["elements/bluefin/quickshell.bst"],
+      "enabled": true
+    },
+    {
+      "description": "Track AWWW upstream releases",
+      "matchManagers": ["regex"],
+      "matchFileNames": ["elements/bluefin/awww.bst"],
+      "enabled": true
+    },
+    {
+      "description": "Track Rofi upstream releases",
+      "matchManagers": ["regex"],
+      "matchFileNames": ["elements/bluefin/rofi.bst"],
+      "enabled": true
+    },
+    {
+      "description": "Track Grim upstream releases",
+      "matchManagers": ["regex"],
+      "matchFileNames": ["elements/bluefin/grim.bst"],
+      "enabled": true
+    },
+    {
+      "description": "Track Bluetui upstream releases",
+      "matchManagers": ["regex"],
+      "matchFileNames": ["elements/bluefin/bluetui.bst"],
+      "enabled": true
+    },
+    {
+      "description": "Track SwayNC upstream releases",
+      "matchManagers": ["regex"],
+      "matchFileNames": ["elements/bluefin/swaync.bst"],
+      "enabled": true
+    },
+    {
+      "description": "Track wlogout upstream releases",
+      "matchManagers": ["regex"],
+      "matchFileNames": ["elements/bluefin/wlogout.bst"],
+      "enabled": true
+    },
+    {
+      "description": "Track polkit-gnome upstream releases",
+      "matchManagers": ["regex"],
+      "matchFileNames": ["elements/bluefin/polkit-gnome.bst"],
+      "enabled": true
+    },
+    {
+      "description": "Track brightnessctl upstream releases",
+      "matchManagers": ["regex"],
+      "matchFileNames": ["elements/bluefin/brightnessctl.bst"],
+      "enabled": true
+    },
+    {
+      "description": "Track playerctl upstream releases",
+      "matchManagers": ["regex"],
+      "matchFileNames": ["elements/bluefin/playerctl.bst"],
+      "enabled": true
+    },
+    {
+      "description": "Track Qt6 upstream releases",
+      "matchManagers": ["regex"],
+      "matchFileNames": ["elements/qt6/qt6base.bst", "elements/qt6/qt6declarative.bst", "elements/qt6/qt6svg.bst", "elements/qt6/qt6wayland.bst"],
+      "enabled": true
+    }
+  ],
+
+  // Regex managers for BuildStream source tracking
+  "regexManagers": [
+    {
+      "fileMatch": ["elements/bluefin/niri.bst"],
+      "matchStrings": [
+        'url:\\s+niri_releases:(?<version>v[0-9.]+)/niri-(?<version>[0-9.]+)\\.tar\\.gz'
+      ],
+      "depNameTemplate": "niri-wm/niri",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
+    },
+    {
+      "fileMatch": ["elements/bluefin/quickshell.bst"],
+      "matchStrings": [
+        'url:\\s+quickshell_releases:(?<version>v[0-9.]+)/quickshell-(?<version>[0-9.]+)\\.tar\\.gz'
+      ],
+      "depNameTemplate": "quickshell-mirror/quickshell",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
+    },
+    {
+      "fileMatch": ["elements/bluefin/awww.bst"],
+      "matchStrings": [
+        'url:\\s+codeberg_files:LGFae/awww/archive/v(?<version>[0-9.]+)\\.tar\\.gz'
+      ],
+      "depNameTemplate": "LGFae/awww",
+      "datasourceTemplate": "codeberg",
+      "versioningTemplate": "semver"
+    },
+    {
+      "fileMatch": ["elements/bluefin/rofi.bst"],
+      "matchStrings": [
+        'url:\\s+rofi_releases:(?<version>[0-9.]+)/rofi-(?<version>[0-9.]+)\\.tar\\.gz'
+      ],
+      "depNameTemplate": "davatorium/rofi",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
+    },
+    {
+      "fileMatch": ["elements/bluefin/grim.bst"],
+      "matchStrings": [
+        'url:\\s+grim_releases:v(?<version>[0-9.]+)/grim-(?<version>[0-9.]+)\\.tar\\.gz'
+      ],
+      "depNameTemplate": "GrimAnticheat/Grim",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
+    },
+    {
+      "fileMatch": ["elements/bluefin/bluetui.bst"],
+      "matchStrings": [
+        'url:\\s+bluetui_releases:v(?<version>[0-9.]+)/bluetui-(?<version>[0-9.]+)\\.tar\\.gz'
+      ],
+      "depNameTemplate": "pythops/bluetui",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
+    },
+    {
+      "fileMatch": ["elements/bluefin/swaync.bst"],
+      "matchStrings": [
+        'url:\\s+swaync_releases:v(?<version>[0-9.]+)/swaync-(?<version>[0-9.]+)\\.tar\\.gz'
+      ],
+      "depNameTemplate": "ErikReider/SwayNotificationCenter",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
+    },
+    {
+      "fileMatch": ["elements/bluefin/wlogout.bst"],
+      "matchStrings": [
+        'url:\\s+wlogout_releases:v(?<version>[0-9.]+)/wlogout-(?<version>[0-9.]+)\\.tar\\.gz'
+      ],
+      "depNameTemplate": "ArtsyMacaw/wlogout",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
+    },
+    {
+      "fileMatch": ["elements/bluefin/polkit-gnome.bst"],
+      "matchStrings": [
+        'track:\\s+"\\[0-9\\]*.\\[0-9\\]*.\\[0-9\\]*",
+        'ref:\\s+(?<version>[0-9.]+)'
+      ],
+      "depNameTemplate": "GNOME/polkit-gnome",
+      "datasourceTemplate": "gitlab",
+      "versioningTemplate": "semver"
+    },
+    {
+      "fileMatch": ["elements/bluefin/brightnessctl.bst"],
+      "matchStrings": [
+        'url:\\s+brightnessctl_releases:v(?<version>[0-9.]+)/brightnessctl-(?<version>[0-9.]+)\\.tar\\.gz'
+      ],
+      "depNameTemplate": "Hummer12007/brightnessctl",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
+    },
+    {
+      "fileMatch": ["elements/bluefin/playerctl.bst"],
+      "matchStrings": [
+        'url:\\s+playerctl_releases:v(?<version>[0-9.]+)/playerctl-(?<version>[0-9.]+)\\.tar\\.gz'
+      ],
+      "depNameTemplate": "altdesktop/playerctl",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
+    },
+    {
+      "fileMatch": ["elements/qt6/qt6base.bst", "elements/qt6/qt6declarative.bst", "elements/qt6/qt6svg.bst", "elements/qt6/qt6wayland.bst"],
+      "matchStrings": [
+        'url:\\s+qt_downloads:[0-9]+\\.[0-9]+/(?<version>[0-9.]+)/'
+      ],
+      "depNameTemplate": "qt/qtbase",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
     }
   ]
 }

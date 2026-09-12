@@ -19,4 +19,8 @@ config:
   - install -d "%{install-root}/usr/lib/systemd/system/multi-user.target.wants"
   - ln -sf ../ublue-boot-timeout.service "%{install-root}/usr/lib/systemd/system/multi-user.target.wants/ublue-boot-timeout.service"
   - install -Dm644 "flatpak-preinstall.service.d/condition-check.conf" "%{install-root}/usr/lib/systemd/system/flatpak-preinstall.service.d/condition-check.conf"
+  - install -Dm644 yutyrannus-gdm-autologin.service "%{install-root}/usr/lib/systemd/system/yutyrannus-gdm-autologin.service"
+  - install -Dm755 yutyrannus-gdm-autologin.sh "%{install-root}/usr/libexec/yutyrannus-gdm-autologin.sh"
+  - install -d "%{install-root}/usr/lib/systemd/system/multi-user.target.wants"
+  - ln -sf ../yutyrannus-gdm-autologin.service "%{install-root}/usr/lib/systemd/system/multi-user.target.wants/yutyrannus-gdm-autologin.service"
   - "%{install-extra}"

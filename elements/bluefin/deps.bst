@@ -6,8 +6,6 @@ kind: stack
 depends:
   - gnome-build-meta.bst:gnomeos-deps/deps.bst
 
-  - bluefin/gnome-shell-extensions.bst
-
   - bluefin/brew.bst
   - bluefin/brew-tarball.bst
 
@@ -88,3 +86,17 @@ depends:
   - bluefin/migrate-var-home-passwd.bst
 
   - gnome-build-meta.bst:gnomeos-deps/snapd.bst
+
+  # Niri WM stack
+  - bluefin/niri.bst
+  - bluefin/niri-session.bst
+  - bluefin/quickshell.bst
+  - bluefin/awww.bst
+  - bluefin/rofi.bst
+  - bluefin/grim.bst
+  - bluefin/bluetui.bst
+  - bluefin/swaync.bst
+  - bluefin/wlogout.bst
+  - bluefin/polkit-gnome.bst
+  - bluefin/brightnessctl.bst
+  - bluefin/playerctl.bst
