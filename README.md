@@ -1,14 +1,14 @@
 # Yutyrannus
-*Yutyrannus harenipes* — a Niri WM Wayland compositor image built from source
+*Yutyrannus harenipes* — a Mango WM Wayland compositor image built from source
 
-[Niri](https://github.com/niri-wm/niri) — a scrollable-tiling Wayland compositor, built from source with BuildStream 2 on top of freedesktop-sdk 26.08 with NVIDIA proprietary drivers.
+[Mango](https://github.com/mangowm/mango) — a Wayland compositor, built from source with BuildStream 2 on top of freedesktop-sdk 26.08 with NVIDIA proprietary drivers.
 
 ## Image
 
 | Tag | Stream | What it is |
 | -----: | ------ | ----------------------------------------------------------------- |
-| `:stable` | Stable | Niri WM — production. Automated promotion from `:testing`. |
-| `:testing` | Dev | Niri WM — daily builds from `testing` branch. Boot-check gated. |
+| `:stable` | Stable | Mango WM — production. Automated promotion from `:testing`. |
+| `:testing` | Dev | Mango WM — daily builds from `testing` branch. Boot-check gated. |
 
 ```bash
 # Install the stable image
@@ -20,7 +20,7 @@ sudo bootc switch ghcr.io/huntedraven7/yutyrannus-nvidia:testing
 
 ## Desktop Environment
 
-- **Niri WM v26.04** — Scrollable-tiling Wayland compositor (Rust/cargo)
+- **Mango WM v0.17.0** — Wayland compositor (Rust/cargo)
 - **Quickshell v0.3.1** — Qt6-based shell/widgets (built from source with custom Qt6)
 - **AWWW v0.12.1** — Wallpaper daemon (Rust/cargo)
 - **Rofi 2.0.0** — Application launcher (meson)

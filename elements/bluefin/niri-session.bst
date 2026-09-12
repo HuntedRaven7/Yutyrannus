@@ -2,7 +2,7 @@ kind: manual
 
 sources:
 - kind: local
-  path: files/niri
+  path: files/mango
 
 build-depends:
 - core/sandbox-tools.bst
