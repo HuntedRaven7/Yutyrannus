@@ -9,7 +9,7 @@ build-depends:
 - freedesktop-sdk.bst:public-stacks/runtime-minimal.bst
 
 depends:
-- bluefin/niri.bst
+- bluefin/mango.bst
 
 config:
   install-commands:

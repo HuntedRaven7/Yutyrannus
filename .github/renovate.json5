@@ -42,7 +42,7 @@
     {
       "description": "Track Mango WM upstream releases",
       "matchManagers": ["regex"],
-      "matchFileNames": ["elements/bluefin/niri.bst"],
+      "matchFileNames": ["elements/bluefin/mango.bst"],
       "enabled": true
     },
     {
@@ -116,9 +116,9 @@
   // Regex managers for BuildStream source tracking
   "regexManagers": [
     {
-      "fileMatch": ["elements/bluefin/niri.bst"],
+        "fileMatch": ["elements/bluefin/mango.bst"],
       "matchStrings": [
-        'url:\\s+mango_releases:v(?<version>[0-9.]+)/mango-(?<version>[0-9.]+)\\.tar\\.gz'
+        'ref: (?<version>[0-9]+\\.[0-9]+\\.[0-9]+)-0-g[0-9a-f]+'
       ],
       "depNameTemplate": "mangowm/mango",
       "datasourceTemplate": "github-releases",

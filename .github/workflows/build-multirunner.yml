@@ -63,7 +63,7 @@ jobs:
         qt6/qt6declarative.bst
         qt6/qt6svg.bst
         qt6/qt6wayland.bst
-        bluefin/niri.bst
+        bluefin/mango.bst
         bluefin/ghostty.bst
         bluefin/uutils-coreutils.bst
         bluefin/sudo-rs.bst
@@ -282,7 +282,7 @@ jobs:
         qt6/qt6declarative.bst
         qt6/qt6svg.bst
         qt6/qt6wayland.bst
-        bluefin/niri.bst
+        bluefin/mango.bst
         bluefin/ghostty.bst
         bluefin/uutils-coreutils.bst
         bluefin/sudo-rs.bst

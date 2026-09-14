@@ -88,8 +88,8 @@ depends:
   - gnome-build-meta.bst:gnomeos-deps/snapd.bst
 
   # Niri WM stack
-  - bluefin/niri.bst
-  - bluefin/niri-session.bst
+  - bluefin/mango.bst
+  - bluefin/mango-session.bst
   - bluefin/quickshell.bst
   - bluefin/awww.bst
   - bluefin/rofi.bst

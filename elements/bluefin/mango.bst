@@ -1,9 +1,10 @@
 kind: manual
 
 sources:
-- kind: tar
-  url: mango_releases:v0.17.0/mango-0.17.0.tar.gz
-  ref: 5c7e2b4a8f3d1e9b7c8d9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c
+- kind: git_repo
+  url: github:mangowm/mango.git
+  track: "[0-9]*.[0-9]*.[0-9]*"
+  ref: 0.17.0-0-gc45746cb9cfa00e438473df19556ef2d12ff713a
 
 build-depends:
 - core/sandbox-tools.bst
