@@ -4,7 +4,7 @@ sources:
 - kind: git_repo
   url: github:Vladimir-csp/xdg-terminal-exec.git
   track: 'v[0-9]*.[0-9]*.[0-9]*'
-  ref: v0.14.3
+  ref: 065925df9f419008159258ae169018bfd23df71b
 
 build-depends:
 - core/sandbox-tools.bst
