@@ -4,7 +4,7 @@ sources:
 - kind: git_repo
   url: github:quickshell-mirror/quickshell.git
   track: "[0-9]*.[0-9]*.[0-9]*"
-  ref: 0.3.1
+  ref: 06f73a5ef6b23f78de4dc009c6318c3e38e98e13
 
 build-depends:
 - freedesktop-sdk.bst:public-stacks/buildsystem-meson.bst

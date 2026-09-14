@@ -26,7 +26,7 @@ sources:
   url: github:elFarto/nvidia-vaapi-driver.git
   track: '*'
 
-  ref: v0.0.17
+  ref: 0ba758d54591bf90133f63ca8b29796d51ec1761
 
 config:
   install-commands:
