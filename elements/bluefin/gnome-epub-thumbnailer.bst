@@ -4,7 +4,7 @@ sources:
 - kind: git_repo
   url: gnome:gnome-epub-thumbnailer.git
   track: "1.8"
-  ref: 1.8-0-g64912a3a75a9dffd9db107d948336060837cc273
+  ref: 1.8
 
 build-depends:
 - freedesktop-sdk.bst:public-stacks/buildsystem-meson.bst

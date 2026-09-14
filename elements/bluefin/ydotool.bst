@@ -6,7 +6,7 @@ sources:
 - kind: git_repo
   url: github:ReimuNotMoe/ydotool.git
   track: v1.0.4
-  ref: v1.0.4-0-g57ba7d0af525e82da2de0e275d169477f293b197
+  ref: v1.0.4
 
 build-depends:
 - freedesktop-sdk.bst:public-stacks/buildsystem-cmake.bst

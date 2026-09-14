@@ -4,7 +4,7 @@ sources:
 - kind: git_repo
   url: github:mangowm/mango.git
   track: "[0-9]*.[0-9]*.[0-9]*"
-  ref: 0.17.0-0-gc45746cb9cfa00e438473df19556ef2d12ff713a
+  ref: 0.17.0
 
 build-depends:
 - core/sandbox-tools.bst

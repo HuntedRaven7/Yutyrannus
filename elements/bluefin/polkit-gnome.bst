@@ -4,7 +4,7 @@ sources:
 - kind: git_repo
   url: gnome:polkit-gnome
   track: "[0-9]*.[0-9]*.[0-9]*"
-  ref: 0.107-0-g5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e
+  ref: 0.107
 
 build-depends:
 - freedesktop-sdk.bst:public-stacks/buildsystem-meson.bst

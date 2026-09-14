@@ -11,7 +11,7 @@ sources:
   - kind: git_repo
     url: github:JetBrains/JetBrainsMono
     track: v*
-    ref: v2.304-0-gcd5227bd1f61dff3bbd6c814ceaf7ffd95e947d9
+    ref: v2.304
 
 variables:
   license-files-extra: "OFL.txt"

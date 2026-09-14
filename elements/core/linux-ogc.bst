@@ -253,7 +253,7 @@ sources:
 - kind: git_repo
   url: github:OpenGamingCollective/linux.git
   track: v7.2.1-ogc*
-  ref: v7.2.1-ogc4-0-g14c028f83498b2900fecd0940a058a3ac0622afe
+  ref: v7.2.1-ogc4
 - kind: local
   path: files/linux/config-utils.sh
 - kind: local

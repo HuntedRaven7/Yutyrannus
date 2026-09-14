@@ -32,7 +32,7 @@ sources:
 - kind: git_repo
   url: github:memorysafety/sudo-rs.git
   track: 'v[0-9]*.[0-9]*.[0-9]*'
-  ref: v0.2.15-0-ge4cfa9cf7b71e287dd5046633c0f5276072d147d # v0.2.13
+  ref: v0.2.15 # v0.2.13
 - kind: cargo2
   url: crates:crates
   ref:

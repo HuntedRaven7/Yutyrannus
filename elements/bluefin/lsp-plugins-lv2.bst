@@ -4,7 +4,7 @@ sources:
 - kind: git_repo
   url: github:sadko4u/lsp-plugins.git
   track: lsp-plugins-1.1.*
-  ref: lsp-plugins-1.1.26-0-gad2720345ce5dffb45f871146de1ae6d16f4c73d
+  ref: lsp-plugins-1.1.26
 
 variables:
   make-args: >-

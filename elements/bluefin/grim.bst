@@ -4,7 +4,7 @@ sources:
 - kind: git_repo
   url: github:GrimAnticheat/Grim.git
   track: "v[0-9]*.[0-9]*.[0-9]*"
-  ref: v2.3.73-0-g879d566c05bc
+  ref: v2.3.73
 
 build-depends:
 - freedesktop-sdk.bst:public-stacks/buildsystem-meson.bst

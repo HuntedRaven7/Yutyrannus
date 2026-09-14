@@ -4,7 +4,7 @@ sources:
 - kind: git_repo
   url: github:pythops/bluetui.git
   track: "v[0-9]*.[0-9]*.[0-9]*"
-  ref: v0.8.1-0-gc959c09bb17b
+  ref: v0.8.1
 
 build-depends:
 - core/sandbox-tools.bst
