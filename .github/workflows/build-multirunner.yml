@@ -42,6 +42,31 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # ── Debug: expose bst show stderr ──────────────────────────────────────
+  debug_bst_show:
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - run: podman pull "$BST2_IMAGE"
+      - run: |
+          mkdir -p .cache/buildstream logs
+          podman run --rm --privileged --device /dev/fuse \
+            --security-opt apparmor=unconfined --cap-add SYS_ADMIN \
+            -v "${{ github.workspace }}:/src:rw" \
+            -v "${{ github.workspace }}/.cache/buildstream:/root/.cache/buildstream:rw" \
+            -w /src \
+            "$BST2_IMAGE" \
+            bash -c 'bst show --deps all --order stage --format "%{name}||%{state}||%{full-key}" oci/yutyrannus-nvidia.bst 2>&1 || true' \
+            > logs/bst-show-debug.log 2>&1 || true
+      - run: cat logs/bst-show-debug.log
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: bst-show-debug
+          path: logs/bst-show-debug.log
+          retention-days: 7
+
   # ── Phase 1-3: Plan, core, parallel dependency chunks ────────────────
   multirunner:
     uses: tuna-os/bst-ci/.github/workflows/multirunner-build.yml@main
