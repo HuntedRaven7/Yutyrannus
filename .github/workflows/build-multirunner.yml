@@ -57,9 +57,13 @@ jobs:
             -v "${{ github.workspace }}/.cache/buildstream:/root/.cache/buildstream:rw" \
             -w /src \
             "$BST2_IMAGE" \
-            bash -c 'bst show --deps all --order stage --format "%{name}||%{state}||%{full-key}" oci/yutyrannus-nvidia.bst 2>&1 || true' \
+            bash -c 'bst show --deps all --order stage --format "%{name}||%{state}||%{full-key}" oci/yutyrannus-nvidia.bst 2>&1; echo "BST_EXIT=$?"' \
             > logs/bst-show-debug.log 2>&1 || true
-      - run: cat logs/bst-show-debug.log
+      - run: |
+          echo "=== bst show exit code ==="
+          grep "BST_EXIT=" logs/bst-show-debug.log || true
+          echo "=== Last 30 lines ==="
+          tail -30 logs/bst-show-debug.log
       - uses: actions/upload-artifact@v7
         if: always()
         with:
