@@ -53,25 +53,27 @@ jobs:
       bst_target: oci/yutyrannus-nvidia.bst
       num_chunks: ${{ inputs.num_chunks || '10' }}
       core_split: "200"
-      # Shared spine of expensive elements that many chunks transitively
-      # depend on. Building them in core puts them in the shared core CAS
-      # that every chunk restores, so they are built once instead of once
-      # per chunk. The chunk matrix and cache keys are computed from
-      # core_split alone, so adding targets here never invalidates an
-      # existing GHCR chunk cache.
+      # Yutyrannus-specific expensive shared dependencies. These are built once
+      # in core so every chunk gets them from the shared core CAS instead of
+      # rebuilding them. The chunk matrix and cache keys are computed from
+      # core_split alone, so adding targets here never invalidates an existing
+      # GHCR chunk cache.
       extra_core_targets: >-
-        sdk/webkitgtk-6.0.bst
-        kde/frameworks/kio.bst
-        kde/qt6/qt6-qtdeclarative.bst
-        kde/qt6/qt6-qtquick3d.bst
-        kde/qt6/qt6-qttools.bst
-        freedesktop-sdk.bst:components/llvm.bst
-        freedesktop-sdk.bst:components/rust.bst
-        freedesktop-sdk.bst:components/doxygen.bst
-        freedesktop-sdk.bst:components/cargo-c.bst
-        freedesktop-sdk.bst:components/gdb.bst
-        freedesktop-sdk.bst:components/systemd-stage1.bst
-        sdk/glycin.bst
+        qt6/qt6base.bst
+        qt6/qt6declarative.bst
+        qt6/qt6svg.bst
+        qt6/qt6wayland.bst
+        bluefin/niri.bst
+        bluefin/ghostty.bst
+        bluefin/uutils-coreutils.bst
+        bluefin/sudo-rs.bst
+        gnomeos-deps/bootc.bst
+        gaming/gamescope.bst
+        bluefin-nvidia/nvidia-drivers.bst
+        bluefin-nvidia/nvidia-vaapi-driver.bst
+        core/linux-mainline.bst
+        core/linux-ogc.bst
+        bluefin/vte.bst
       # That spine is well over a single job's worth of serial work at 2
       # cores, so core will exhaust its budget for the first few runs. Its
       # CAS is pushed regardless (the push step is if: always()), so each
@@ -276,18 +278,21 @@ jobs:
       num_chunks: ${{ inputs.num_chunks || '10' }}
       core_split: "200"
       extra_core_targets: >-
-        sdk/webkitgtk-6.0.bst
-        kde/frameworks/kio.bst
-        kde/qt6/qt6-qtdeclarative.bst
-        kde/qt6/qt6-qtquick3d.bst
-        kde/qt6/qt6-qttools.bst
-        freedesktop-sdk.bst:components/llvm.bst
-        freedesktop-sdk.bst:components/rust.bst
-        freedesktop-sdk.bst:components/doxygen.bst
-        freedesktop-sdk.bst:components/cargo-c.bst
-        freedesktop-sdk.bst:components/gdb.bst
-        freedesktop-sdk.bst:components/systemd-stage1.bst
-        sdk/glycin.bst
+        qt6/qt6base.bst
+        qt6/qt6declarative.bst
+        qt6/qt6svg.bst
+        qt6/qt6wayland.bst
+        bluefin/niri.bst
+        bluefin/ghostty.bst
+        bluefin/uutils-coreutils.bst
+        bluefin/sudo-rs.bst
+        gnomeos-deps/bootc.bst
+        gaming/gamescope.bst
+        bluefin-nvidia/nvidia-drivers.bst
+        bluefin-nvidia/nvidia-vaapi-driver.bst
+        core/linux-mainline.bst
+        core/linux-ogc.bst
+        bluefin/vte.bst
       core_budget_minutes: "300"
       soft_core_budget: true
       soft_chunk_budget: true
