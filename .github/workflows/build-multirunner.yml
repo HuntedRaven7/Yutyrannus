@@ -68,6 +68,8 @@ jobs:
               echo "=== Test 3: bluefin/common.bst ==="
               bst show bluefin/common.bst > /tmp/bst-show3.out 2>&1
               echo "TEST3_EXIT=$?"
+              echo "=== Test 3 output ==="
+              cat /tmp/bst-show3.out
               echo "=== Test 4: oci/yutyrannus-nvidia.bst ==="
               bst show oci/yutyrannus-nvidia.bst > /tmp/bst-show4.out 2>&1
               echo "TEST4_EXIT=$?"
@@ -79,8 +81,8 @@ jobs:
       - run: |
           echo "=== Test results ==="
           grep "TEST[12345]_EXIT=" logs/bst-show-debug.log || true
-          echo "=== Last 60 lines ==="
-          tail -60 logs/bst-show-debug.log
+          echo "=== Last 80 lines ==="
+          tail -80 logs/bst-show-debug.log
       - uses: actions/upload-artifact@v7
         if: always()
         with:
