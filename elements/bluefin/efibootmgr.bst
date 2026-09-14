@@ -4,7 +4,7 @@ sources:
 - kind: git_repo
   url: github:rhboot/efibootmgr.git
   track: "18"
-  ref: 18
+  ref: 712aeb81311de28a3fcfea7465dcb93743f07a53
 
 build-depends:
 - freedesktop-sdk.bst:public-stacks/buildsystem-make.bst
