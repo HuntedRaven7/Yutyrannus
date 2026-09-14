@@ -136,7 +136,7 @@ sources:
 - kind: git_repo
   url: github:uutils/coreutils.git
   track: '[0-9]*.[0-9]*.[0-9]*'
-  ref: 0.11.0 # 0.8.0
+  ref: 05210358853b56b453829449218b2beabfacdace # 0.8.0
 - kind: cargo2
   url: crates:crates
   ref:
