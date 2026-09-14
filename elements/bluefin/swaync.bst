@@ -2,8 +2,8 @@ kind: meson
 
 sources:
 - kind: tar
-  url: swaync_releases:v0.9.3/swaync-0.9.3.tar.gz
-  ref: 1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2
+  url: swaync_releases:v0.12.6/swaync-0.12.6.tar.gz
+  ref: 0c844eb5c9524f924495bd4145e5db575096de36f3ec87fb37e4c1ed6eacb897
 
 build-depends:
 - freedesktop-sdk.bst:public-stacks/buildsystem-meson.bst

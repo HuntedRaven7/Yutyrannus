@@ -3,7 +3,7 @@ kind: manual
 sources:
 - kind: tar
   url: qt_downloads:6.8/6.8.1/single/qt-everywhere-src-6.8.1.tar.xz
-  ref: 1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2
+  ref: 40b14562ef3bd779bc0e0418ea2ae08fa28235f8ea6e8c0cb3bce1d6ad58dcaf
 
 build-depends:
 - freedesktop-sdk.bst:public-stacks/buildsystem-cmake.bst

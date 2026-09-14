@@ -3,7 +3,7 @@ kind: manual
 sources:
 - kind: tar
   url: codeberg_files:LGFae/awww/archive/v0.12.1.tar.gz
-  ref: 1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2
+  ref: 97b3f1c6d65d9d30e51b17092a45244f8c8549607c9207f3c98d82b28ba18fca
 
 build-depends:
 - core/sandbox-tools.bst

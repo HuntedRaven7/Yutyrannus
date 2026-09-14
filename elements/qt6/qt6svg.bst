@@ -3,7 +3,7 @@ kind: manual
 sources:
 - kind: tar
   url: qt_downloads:6.8/6.8.1/submodules/qtsvg-everywhere-src-6.8.1.tar.xz
-  ref: 1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2
+  ref: 3d0de73596e36b2daa7c48d77c4426bb091752856912fba720215f756c560dd0
 
 build-depends:
 - freedesktop-sdk.bst:public-stacks/buildsystem-cmake.bst

@@ -1,9 +1,10 @@
 kind: meson
 
 sources:
-- kind: tar
-  url: quickshell_releases:v0.3.1/quickshell-0.3.1.tar.gz
-  ref: 1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2
+- kind: git_repo
+  url: github:quickshell-mirror/quickshell.git
+  track: "[0-9]*.[0-9]*.[0-9]*"
+  ref: 0.3.1-0-g06f73a5ef6b2
 
 build-depends:
 - freedesktop-sdk.bst:public-stacks/buildsystem-meson.bst

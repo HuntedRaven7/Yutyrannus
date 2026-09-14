@@ -3,7 +3,7 @@ kind: manual
 sources:
 - kind: tar
   url: qt_downloads:6.8/6.8.1/submodules/qtdeclarative-everywhere-src-6.8.1.tar.xz
-  ref: 1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2
+  ref: 95d15d5c1b6adcedb1df6485219ad13b8dc1bb5168b5151f2f1f7246a4c039fc
 
 build-depends:
 - freedesktop-sdk.bst:public-stacks/buildsystem-cmake.bst

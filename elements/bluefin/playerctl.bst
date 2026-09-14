@@ -2,8 +2,8 @@ kind: meson
 
 sources:
 - kind: tar
-  url: playerctl_releases:v2.5.1/playerctl-2.5.1.tar.gz
-  ref: 1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2
+  url: playerctl_releases:v2.4.1/playerctl-2.4.1.tar.gz
+  ref: 75957ad5071956f563542c7557af16a57e40b4a7f66bc9b6373d022ec5eef548
 
 build-depends:
 - freedesktop-sdk.bst:public-stacks/buildsystem-meson.bst
