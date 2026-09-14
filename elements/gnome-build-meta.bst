@@ -25,6 +25,3 @@ config:
     oci/integration/os-release.bst: oci/os-release.bst
 
     gnomeos/initramfs/signed-modules.bst: bluefin/unsigned-modules.bst
-
-    plugins/buildstream-plugins.bst: plugins/buildstream-plugins.bst
-    plugins/buildstream-plugins-community.bst: plugins/buildstream-plugins-community.bst
