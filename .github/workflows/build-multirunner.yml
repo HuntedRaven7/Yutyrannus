@@ -59,20 +59,25 @@ jobs:
             "$BST2_IMAGE" \
             bash -c '
               set -x
-              echo "=== Test 1: bst show without format ==="
-              bst show --deps all oci/yutyrannus-nvidia.bst > /tmp/bst-show1.out 2>&1
+              echo "=== Test 1: bst show --deps build ==="
+              bst show --deps build oci/yutyrannus-nvidia.bst > /tmp/bst-show1.out 2>&1
               echo "TEST1_EXIT=$?"
-              echo "=== Test 2: bst show with format ==="
-              bst show --deps all --format "%{name}" oci/yutyrannus-nvidia.bst > /tmp/bst-show2.out 2>&1
+              echo "=== Test 2: bst show --deps run ==="
+              bst show --deps run oci/yutyrannus-nvidia.bst > /tmp/bst-show2.out 2>&1
               echo "TEST2_EXIT=$?"
-              echo "=== Test 3: bst show with order stage ==="
-              bst show --deps all --order stage --format "%{name}||%{state}||%{full-key}" oci/yutyrannus-nvidia.bst > /tmp/bst-show3.out 2>&1
+              echo "=== Test 3: bst show --deps all ==="
+              bst show --deps all oci/yutyrannus-nvidia.bst > /tmp/bst-show3.out 2>&1
               echo "TEST3_EXIT=$?"
+              echo "=== Test 4: bst show freedesktop-sdk.bst ==="
+              bst show freedesktop-sdk.bst > /tmp/bst-show4.out 2>&1
+              echo "TEST4_EXIT=$?"
             ' \
             > logs/bst-show-debug.log 2>&1 || true
       - run: |
           echo "=== Test results ==="
-          grep "TEST[123]_EXIT=" logs/bst-show-debug.log || true
+          grep "TEST[1234]_EXIT=" logs/bst-show-debug.log || true
+          echo "=== Last 40 lines ==="
+          tail -40 logs/bst-show-debug.log
       - uses: actions/upload-artifact@v7
         if: always()
         with:
