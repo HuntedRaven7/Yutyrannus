@@ -13,7 +13,9 @@ build-depends:
 public:
   bst:
     overlap-whitelist:
-    - /usr/share/locale/*/LC_MESSAGES/glib20.mo
+    - /usr/share/**
+    - /usr/lib/**
+    - /usr/include/**
 
 environment:
   LD_PRELOAD: /usr/libexec/fakecap/fakecap.so
