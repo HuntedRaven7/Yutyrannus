@@ -1,0 +1,469 @@
+name: Build Yutyrannus NVIDIA (Multi-Runner)
+
+# Multi-runner BuildStream build: splits the dependency graph across parallel
+# GitHub Actions runners, sharing CAS state via GHCR-hosted zstd tarballs.
+# The planning + core + parallel chunk jobs live in the reusable workflow
+# `tuna-os/bst-ci`; build_final (export, sign, push) stays here so cosign's
+# keyless OIDC identity reflects *this* workflow file.
+
+# Multi-runner builds take hours. Push-triggering would cancel in-flight runs
+# on every push, preventing cache convergence. `validate.yml` remains the
+# push-time feedback loop; this workflow runs on a schedule + manual dispatch.
+
+on:
+  schedule:
+    # Daily at 00:30 UTC — adjust as needed.
+    - cron: '30 0 * * *'
+  workflow_dispatch:
+    inputs:
+      push_image:
+        description: 'Push OCI image to GHCR'
+        type: boolean
+        default: true
+      num_chunks:
+        description: 'Number of parallel dependency chunks'
+        type: string
+        default: '10'
+      build_aarch64:
+        description: 'Also build an aarch64 image (experimental, manual-only)'
+        type: boolean
+        default: false
+
+env:
+  IMAGE_NAME: yutyrannus-nvidia
+  IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
+  BST_TARGET: oci/yutyrannus-nvidia.bst
+  BST2_IMAGE: registry.gitlab.com/freedesktop-sdk/infrastructure/freedesktop-sdk-docker-images/bst2:64eb0b4930d57a92710822898fb73af6cc1ae35d
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Queue instead of cancel: the next run picks up the latest HEAD when its
+  # turn comes, rather than restarting from scratch on every intervening push.
+  cancel-in-progress: false
+
+jobs:
+  # ── Phase 1-3: Plan, core, parallel dependency chunks ────────────────
+  multirunner:
+    uses: tuna-os/bst-ci/.github/workflows/multirunner-build.yml@main
+    permissions:
+      contents: read
+      packages: write
+    with:
+      image_name: yutyrannus-nvidia
+      bst_target: oci/yutyrannus-nvidia.bst
+      num_chunks: ${{ inputs.num_chunks || '10' }}
+      core_split: "200"
+      # Shared spine of expensive elements that many chunks transitively
+      # depend on. Building them in core puts them in the shared core CAS
+      # that every chunk restores, so they are built once instead of once
+      # per chunk. The chunk matrix and cache keys are computed from
+      # core_split alone, so adding targets here never invalidates an
+      # existing GHCR chunk cache.
+      extra_core_targets: >-
+        sdk/webkitgtk-6.0.bst
+        kde/frameworks/kio.bst
+        kde/qt6/qt6-qtdeclarative.bst
+        kde/qt6/qt6-qtquick3d.bst
+        kde/qt6/qt6-qttools.bst
+        freedesktop-sdk.bst:components/llvm.bst
+        freedesktop-sdk.bst:components/rust.bst
+        freedesktop-sdk.bst:components/doxygen.bst
+        freedesktop-sdk.bst:components/cargo-c.bst
+        freedesktop-sdk.bst:components/gdb.bst
+        freedesktop-sdk.bst:components/systemd-stage1.bst
+        sdk/glycin.bst
+      # That spine is well over a single job's worth of serial work at 2
+      # cores, so core will exhaust its budget for the first few runs. Its
+      # CAS is pushed regardless (the push step is if: always()), so each
+      # run resumes where the last stopped and the chunks get a
+      # progressively warmer core cache meanwhile. Only the budget timeout
+      # is tolerated — a real build error still fails core.
+      core_budget_minutes: "300"
+      soft_core_budget: true
+      # Chunks get the same treatment core does, and for the same reason.
+      # A timed-out chunk still publishes only `:latest`, never its exact-key
+      # tag, so nothing is ever marked complete that isn't.
+      soft_chunk_budget: true
+
+  # ── Phase 4: Final assembly + push ──────────────────────────────────
+  build_final:
+    needs: multirunner
+    if: always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # cosign keyless signing (Sigstore/Fulcio OIDC)
+      security-events: write # Trivy SARIF upload
+    steps:
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          tool-cache: true
+
+      - uses: actions/checkout@v7
+
+      - name: Checkout chunkah
+        uses: actions/checkout@v7
+        with:
+          repository: coreos/chunkah
+          path: chunkah
+
+      - run: podman pull "$BST2_IMAGE"
+
+      - name: Setup Just
+        uses: extractions/setup-just@v4
+
+      - name: Setup ORAS
+        uses: oras-project/setup-oras@v2
+
+      - name: Login to GHCR
+        run: echo "$GITHUB_TOKEN" | oras login ghcr.io -u ${{ github.actor }} --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download and Merge CAS Chunks
+        env:
+          MATRIX_KEYS: ${{ needs.multirunner.outputs.matrix_keys }}
+          CACHE_KEYS: ${{ needs.multirunner.outputs.cache_keys }}
+        run: |
+          mkdir -p ~/.cache/buildstream
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+
+          if oras pull "ghcr.io/${REPO_LOWER}/cache-${IMAGE_NAME}-core:latest" -o .; then
+            if [ -f cas-core.tar.zst ]; then
+              zstd -d -c -T0 cas-core.tar.zst | tar -xf - -C "$HOME/.cache/buildstream"
+              rm -f cas-core.tar.zst
+            fi
+          fi
+
+          echo "$MATRIX_KEYS" | jq -r '.[]' | while read -r chunk; do
+            CACHE_KEY=$(echo "$CACHE_KEYS" | jq -r --arg c "$chunk" '.[$c] // empty')
+            PULLED=false
+            if [ -n "$CACHE_KEY" ]; then
+              if oras pull "ghcr.io/${REPO_LOWER}/cache-${IMAGE_NAME}-${chunk}:${CACHE_KEY}" -o .; then
+                PULLED=true
+              fi
+            fi
+            if [ "$PULLED" = "false" ]; then
+              oras pull "ghcr.io/${REPO_LOWER}/cache-${IMAGE_NAME}-${chunk}:latest" -o . || continue
+            fi
+            TARBALL="cas-${chunk}.tar.zst"
+            if [ -f "$TARBALL" ]; then
+              zstd -d -c -T0 "$TARBALL" | tar -xf - -C "$HOME/.cache/buildstream"
+              rm -f "$TARBALL"
+            fi
+          done
+          du -sh ~/.cache/buildstream
+
+      - name: Build Final Target
+        env:
+          BST_FLAGS: --no-interactive --config /src/buildstream-ci.conf
+        run: |
+          mkdir -p logs
+          timeout 300m just bst --log-file /src/logs/build-final.log build ${{ needs.multirunner.outputs.final_target }}
+
+      - name: Capture build timestamp
+        id: timestamp
+        run: echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Export OCI image
+        id: export
+        env:
+          BST_FLAGS: --no-interactive --config /src/buildstream-ci.conf
+          BUILD_IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          OCI_IMAGE_REVISION: ${{ github.sha }}
+          OCI_IMAGE_VERSION: latest
+          OCI_IMAGE_CREATED: ${{ steps.timestamp.outputs.created }}
+        run: |
+          just export
+          echo "image_ref=${{ env.IMAGE_NAME }}:latest" >> "$GITHUB_OUTPUT"
+
+      - name: Verify + lint
+        run: |
+          sudo podman images
+          just lint
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: final-logs-${{ env.IMAGE_NAME }}
+          path: logs/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Login to GHCR (podman)
+        if: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable') && (github.event_name == 'schedule' || inputs.push_image != false) }}
+        run: |
+          echo "$GITHUB_TOKEN" | \
+            sudo podman login ghcr.io --username ${{ github.actor }} --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push to GHCR
+        id: push
+        if: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable') && (github.event_name == 'schedule' || inputs.push_image != false) }}
+        run: |
+          DATE_TAG=$(date -u +%Y%m%d)
+          # Channels: main = nightly trunk (also owns :latest); stable = release bookmark
+          if [ "${{ github.ref }}" = "refs/heads/stable" ]; then
+            TAGS="stable stable-${DATE_TAG} ${{ github.sha }}"
+          else
+            TAGS="latest nightly nightly-${DATE_TAG} ${{ github.sha }}"
+          fi
+          for tag in $TAGS; do
+            sudo podman tag "localhost/${{ steps.export.outputs.image_ref }}" \
+              "${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${tag}"
+            for i in 1 2 3; do
+              sudo podman push "${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${tag}" && break
+              echo "Retry $i..."; sleep 5
+            done
+          done
+          digest=$(sudo podman inspect "${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}" \
+            --format '{{.Digest}}')
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Install cosign
+        if: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable') && (github.event_name == 'schedule' || inputs.push_image != false) }}
+        uses: sigstore/cosign-installer@v4.1.2
+
+      - name: Sign image (cosign keyless)
+        if: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable') && (github.event_name == 'schedule' || inputs.push_image != false) }}
+        run: |
+          cosign sign --yes \
+            "${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.push.outputs.digest }}"
+
+      - name: Trivy image scan
+        if: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable') && (github.event_name == 'schedule' || inputs.push_image != false) }}
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.push.outputs.digest }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+
+      - name: Upload Trivy scan results
+        if: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable') && (github.event_name == 'schedule' || inputs.push_image != false) }}
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-results.sarif
+
+      - name: Build summary
+        if: always()
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target**: \`${BST_TARGET}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image**: \`${IMAGE_REGISTRY}/${IMAGE_NAME}:latest\`" >> $GITHUB_STEP_SUMMARY
+
+  # ── Experimental aarch64 path ───────────────────────────────────────
+  # Manual-dispatch only (build_aarch64 input, default false) — never runs
+  # on the nightly schedule. Pushes exclusively to -aarch64-suffixed tags
+  # (latest-aarch64, nightly-aarch64, etc.) — it can never overwrite
+  # :latest/:nightly/:stable.
+  multirunner_aarch64:
+    if: github.event_name == 'workflow_dispatch' && inputs.build_aarch64 == true
+    uses: tuna-os/bst-ci/.github/workflows/multirunner-build.yml@main
+    permissions:
+      contents: read
+      packages: write
+    with:
+      image_name: yutyrannus-nvidia
+      bst_target: oci/yutyrannus-nvidia.bst
+      num_chunks: ${{ inputs.num_chunks || '10' }}
+      core_split: "200"
+      extra_core_targets: >-
+        sdk/webkitgtk-6.0.bst
+        kde/frameworks/kio.bst
+        kde/qt6/qt6-qtdeclarative.bst
+        kde/qt6/qt6-qtquick3d.bst
+        kde/qt6/qt6-qttools.bst
+        freedesktop-sdk.bst:components/llvm.bst
+        freedesktop-sdk.bst:components/rust.bst
+        freedesktop-sdk.bst:components/doxygen.bst
+        freedesktop-sdk.bst:components/cargo-c.bst
+        freedesktop-sdk.bst:components/gdb.bst
+        freedesktop-sdk.bst:components/systemd-stage1.bst
+        sdk/glycin.bst
+      core_budget_minutes: "300"
+      soft_core_budget: true
+      soft_chunk_budget: true
+      arch: aarch64
+
+  build_final_aarch64:
+    needs: multirunner_aarch64
+    if: needs.multirunner_aarch64.result == 'success'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 360
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      security-events: write
+    env:
+      ARCH_SUFFIX: -aarch64
+    steps:
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          tool-cache: true
+
+      - uses: actions/checkout@v7
+
+      - name: Checkout chunkah
+        uses: actions/checkout@v7
+        with:
+          repository: coreos/chunkah
+          path: chunkah
+
+      - run: podman pull "$BST2_IMAGE"
+
+      - name: Setup Just
+        uses: extractions/setup-just@v4
+
+      - name: Setup ORAS
+        uses: oras-project/setup-oras@v2
+
+      - name: Login to GHCR
+        run: echo "$GITHUB_TOKEN" | oras login ghcr.io -u ${{ github.actor }} --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download and Merge CAS Chunks
+        env:
+          MATRIX_KEYS: ${{ needs.multirunner_aarch64.outputs.matrix_keys }}
+          CACHE_KEYS: ${{ needs.multirunner_aarch64.outputs.cache_keys }}
+        run: |
+          mkdir -p ~/.cache/buildstream
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+
+          if oras pull "ghcr.io/${REPO_LOWER}/cache-${IMAGE_NAME}${ARCH_SUFFIX}-core:latest" -o .; then
+            if [ -f cas-core.tar.zst ]; then
+              zstd -d -c -T0 cas-core.tar.zst | tar -xf - -C "$HOME/.cache/buildstream"
+              rm -f cas-core.tar.zst
+            fi
+          fi
+
+          echo "$MATRIX_KEYS" | jq -r '.[]' | while read -r chunk; do
+            CACHE_KEY=$(echo "$CACHE_KEYS" | jq -r --arg c "$chunk" '.[$c] // empty')
+            PULLED=false
+            if [ -n "$CACHE_KEY" ]; then
+              if oras pull "ghcr.io/${REPO_LOWER}/cache-${IMAGE_NAME}${ARCH_SUFFIX}-${chunk}:${CACHE_KEY}" -o .; then
+                PULLED=true
+              fi
+            fi
+            if [ "$PULLED" = "false" ]; then
+              oras pull "ghcr.io/${REPO_LOWER}/cache-${IMAGE_NAME}${ARCH_SUFFIX}-${chunk}:latest" -o . || continue
+            fi
+            TARBALL="cas-${chunk}.tar.zst"
+            if [ -f "$TARBALL" ]; then
+              zstd -d -c -T0 "$TARBALL" | tar -xf - -C "$HOME/.cache/buildstream"
+              rm -f "$TARBALL"
+            fi
+          done
+          du -sh ~/.cache/buildstream
+
+      - name: Build Final Target
+        env:
+          BST_FLAGS: --no-interactive --config /src/buildstream-ci.conf
+        run: |
+          mkdir -p logs
+          timeout 300m just bst --log-file /src/logs/build-final.log build ${{ needs.multirunner_aarch64.outputs.final_target }}
+
+      - name: Capture build timestamp
+        id: timestamp
+        run: echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Export OCI image
+        id: export
+        env:
+          BST_FLAGS: --no-interactive --config /src/buildstream-ci.conf
+          BUILD_IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          OCI_IMAGE_REVISION: ${{ github.sha }}
+          OCI_IMAGE_VERSION: latest-aarch64
+          OCI_IMAGE_CREATED: ${{ steps.timestamp.outputs.created }}
+        run: |
+          just export
+          echo "image_ref=${{ env.IMAGE_NAME }}:latest-aarch64" >> "$GITHUB_OUTPUT"
+
+      - name: Verify + lint
+        run: |
+          sudo podman images
+          just lint
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: final-logs-${{ env.IMAGE_NAME }}-aarch64
+          path: logs/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Login to GHCR (podman)
+        if: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable') && (github.event_name == 'schedule' || inputs.push_image != false) }}
+        run: |
+          echo "$GITHUB_TOKEN" | \
+            sudo podman login ghcr.io --username ${{ github.actor }} --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push to GHCR
+        id: push
+        if: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable') && (github.event_name == 'schedule' || inputs.push_image != false) }}
+        run: |
+          DATE_TAG=$(date -u +%Y%m%d)
+          # -aarch64-suffixed only — never the bare channel tags
+          if [ "${{ github.ref }}" = "refs/heads/stable" ]; then
+            TAGS="stable-aarch64 stable-${DATE_TAG}-aarch64 ${{ github.sha }}-aarch64"
+          else
+            TAGS="latest-aarch64 nightly-aarch64 nightly-${DATE_TAG}-aarch64 ${{ github.sha }}-aarch64"
+          fi
+          for tag in $TAGS; do
+            sudo podman tag "localhost/${{ steps.export.outputs.image_ref }}" \
+              "${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${tag}"
+            for i in 1 2 3; do
+              sudo podman push "${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${tag}" && break
+              echo "Retry $i..."; sleep 5
+            done
+          done
+          digest=$(sudo podman inspect "${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-aarch64" \
+            --format '{{.Digest}}')
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Install cosign
+        if: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable') && (github.event_name == 'schedule' || inputs.push_image != false) }}
+        uses: sigstore/cosign-installer@v4.1.2
+
+      - name: Sign image (cosign keyless)
+        if: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable') && (github.event_name == 'schedule' || inputs.push_image != false) }}
+        run: |
+          cosign sign --yes \
+            "${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.push.outputs.digest }}"
+
+      - name: Trivy image scan
+        if: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable') && (github.event_name == 'schedule' || inputs.push_image != false) }}
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.push.outputs.digest }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+
+      - name: Upload Trivy scan results
+        if: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable') && (github.event_name == 'schedule' || inputs.push_image != false) }}
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-results.sarif
+
+      - name: Build summary
+        if: always()
+        run: |
+          echo "## Build Summary (aarch64)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target**: \`${BST_TARGET}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image**: \`${IMAGE_REGISTRY}/${IMAGE_NAME}:latest-aarch64\`" >> $GITHUB_STEP_SUMMARY

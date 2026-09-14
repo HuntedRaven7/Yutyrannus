@@ -29,8 +29,16 @@ jobs:
         with:
           tool: just
 
-      - name: Validate publish workflow and composite actions
-        run: just check-publish-workflow
+      - name: Validate publish workflow YAML
+        run: |
+          set -euo pipefail
+          # Verify the publish workflow triggers on the multi-runner build
+          # workflow name (not the old single-runner one).
+          if ! grep -q 'Build Yutyrannus NVIDIA (Multi-Runner)' .github/workflows/publish.yml; then
+            echo "ERROR: publish.yml must trigger on the multi-runner build workflow" >&2
+            exit 1
+          fi
+          echo "publish.yml triggers on multi-runner build workflow: OK"
 
       - name: Restore BST cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -54,10 +62,10 @@ jobs:
 
       - name: Validate BST element graph (default)
         env:
-          BST_FLAGS: -o x86_64_v3 false --no-interactive
+          BST_FLAGS: --no-interactive
         run: just bst show --deps all oci/yutyrannus-nvidia.bst
 
       - name: Validate BST element graph (nvidia)
         env:
-          BST_FLAGS: -o x86_64_v3 false --no-interactive
+          BST_FLAGS: --no-interactive
         run: just bst show --deps all oci/yutyrannus-nvidia.bst
