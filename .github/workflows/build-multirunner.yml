@@ -59,8 +59,8 @@ jobs:
             "$BST2_IMAGE" \
             bash -c '
               set -x
-              echo "=== Running bst show ==="
-              bst show --deps all --order stage --format "%{name}||%{state}||%{full-key}" oci/yutyrannus-nvidia.bst > /tmp/bst-show.out 2>&1
+              echo "=== Running bst show with verbose ==="
+              bst --verbose show --deps all --order stage --format "%{name}||%{state}||%{full-key}" oci/yutyrannus-nvidia.bst > /tmp/bst-show.out 2>&1
               echo "BST_EXIT=$?"
               echo "=== bst show output ==="
               cat /tmp/bst-show.out
