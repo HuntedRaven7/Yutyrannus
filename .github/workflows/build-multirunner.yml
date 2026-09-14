@@ -59,30 +59,18 @@ jobs:
             "$BST2_IMAGE" \
             bash -c '
               set -x
-              echo "=== Test 1: freedesktop-sdk.bst ==="
-              bst show freedesktop-sdk.bst > /tmp/bst-show1.out 2>&1
-              echo "TEST1_EXIT=$?"
-              echo "=== Test 2: gnome-build-meta.bst ==="
-              bst show gnome-build-meta.bst > /tmp/bst-show2.out 2>&1
-              echo "TEST2_EXIT=$?"
-              echo "=== Test 3: bluefin/common.bst ==="
-              bst show bluefin/common.bst > /tmp/bst-show3.out 2>&1
-              echo "TEST3_EXIT=$?"
-              echo "=== Test 3 output ==="
-              cat /tmp/bst-show3.out
-              echo "=== Test 4: oci/yutyrannus-nvidia.bst ==="
-              bst show oci/yutyrannus-nvidia.bst > /tmp/bst-show4.out 2>&1
-              echo "TEST4_EXIT=$?"
-              echo "=== Test 5: oci/layers/yutyrannus-nvidia.bst ==="
-              bst show oci/layers/yutyrannus-nvidia.bst > /tmp/bst-show5.out 2>&1
-              echo "TEST5_EXIT=$?"
+              echo "=== Test: bluefin/common.bst with debug ==="
+              BST_LOG_LEVEL=debug bst show bluefin/common.bst > /tmp/bst-show-debug.out 2>&1
+              echo "TEST_EXIT=$?"
+              echo "=== Last 100 lines ==="
+              tail -100 /tmp/bst-show-debug.out
+              echo "=== Error context ==="
+              grep -B 5 -A 5 "ERROR\|Exception\|Traceback\|FAIL" /tmp/bst-show-debug.out | tail -50
             ' \
             > logs/bst-show-debug.log 2>&1 || true
       - run: |
           echo "=== Test results ==="
-          grep "TEST[12345]_EXIT=" logs/bst-show-debug.log || true
-          echo "=== Last 80 lines ==="
-          tail -80 logs/bst-show-debug.log
+          grep "TEST_EXIT=" logs/bst-show-debug.log || true
       - uses: actions/upload-artifact@v7
         if: always()
         with:
