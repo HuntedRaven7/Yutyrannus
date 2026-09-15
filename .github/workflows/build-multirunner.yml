@@ -1,14 +1,18 @@
-name: Build Yutyrannus NVIDIA (Multi-Runner)
+name: Build Yutyrannus NVIDIA
 
-# Multi-runner BuildStream build: splits the dependency graph across parallel
-# GitHub Actions runners, sharing CAS state via GHCR-hosted zstd tarballs.
-# The planning + core + parallel chunk jobs live in the reusable workflow
-# `tuna-os/bst-ci`; build_final (export, sign, push) stays here so cosign's
-# keyless OIDC identity reflects *this* workflow file.
-
-# Multi-runner builds take hours. Push-triggering would cancel in-flight runs
-# on every push, preventing cache convergence. `validate.yml` remains the
-# push-time feedback loop; this workflow runs on a schedule + manual dispatch.
+# Single-runner BuildStream build with a rolling GHCR-backed CAS cache.
+#
+# Each run restores the previous CAS snapshot, builds the target with a
+# bounded budget, and pushes the (possibly partial) CAS back — so the build
+# converges over successive runs instead of needing ~1150 elements to fit in
+# one 6-hour job. Hitting the budget is an expected checkpoint (green with a
+# warning); only genuine build errors fail the rolling builder.
+# build_final (export, sign, push) stays in this file so cosign's keyless OIDC
+# identity is unchanged.
+#
+# Nightly schedule + manual dispatch. Pushing more often would restart
+# convergence from the latest HEAD each time; `validate.yml` remains the
+# push-time feedback loop.
 
 on:
   schedule:
@@ -20,10 +24,6 @@ on:
         description: 'Push OCI image to GHCR'
         type: boolean
         default: true
-      num_chunks:
-        description: 'Number of parallel dependency chunks'
-        type: string
-        default: '10'
       build_aarch64:
         description: 'Also build an aarch64 image (experimental, manual-only)'
         type: boolean
@@ -78,52 +78,102 @@ jobs:
           path: logs/bst-show-debug.log
           retention-days: 7
 
-  # ── Phase 1-3: Plan, core, parallel dependency chunks ────────────────
-  multirunner:
-    uses: tuna-os/bst-ci/.github/workflows/multirunner-build.yml@main
+  # ── Rolling builder: converges the CAS cache toward a complete build ──
+  build_rolling:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
     permissions:
       contents: read
       packages: write
-    with:
-      image_name: yutyrannus-nvidia
-      bst_target: oci/yutyrannus-nvidia.bst
-      num_chunks: ${{ inputs.num_chunks || '10' }}
-      core_split: "200"
-      # Yutyrannus-specific expensive shared dependencies. These are built once
-      # in core so every chunk gets them from the shared core CAS instead of
-      # rebuilding them. The chunk matrix and cache keys are computed from
-      # core_split alone, so adding targets here never invalidates an existing
-      # GHCR chunk cache.
-      extra_core_targets: >-
-        qt6/qt6base.bst
-        qt6/qt6declarative.bst
-        qt6/qt6svg.bst
-        qt6/qt6wayland.bst
-        bluefin/mango.bst
-        bluefin/ghostty.bst
-        bluefin/uutils-coreutils.bst
-        bluefin/sudo-rs.bst
-        gnomeos-deps/bootc.bst
-        gaming/gamescope.bst
-        bluefin-nvidia/nvidia-drivers.bst
-        bluefin-nvidia/nvidia-vaapi-driver.bst
-        core/linux-mainline.bst
-      # That spine is well over a single job's worth of serial work at 2
-      # cores, so core will exhaust its budget for the first few runs. Its
-      # CAS is pushed regardless (the push step is if: always()), so each
-      # run resumes where the last stopped and the chunks get a
-      # progressively warmer core cache meanwhile. Only the budget timeout
-      # is tolerated — a real build error still fails core.
-      core_budget_minutes: "300"
-      soft_core_budget: true
-      # Chunks get the same treatment core does, and for the same reason.
-      # A timed-out chunk still publishes only `:latest`, never its exact-key
-      # tag, so nothing is ever marked complete that isn't.
-      soft_chunk_budget: true
+    steps:
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          tool-cache: true
 
-  # ── Phase 4: Final assembly + push ──────────────────────────────────
+      - uses: actions/checkout@v7
+      - run: podman pull "$BST2_IMAGE"
+
+      - name: Setup Just
+        uses: extractions/setup-just@v4
+
+      - name: Setup ORAS
+        uses: oras-project/setup-oras@v2
+
+      - name: Login to GHCR
+        run: echo "$GITHUB_TOKEN" | oras login ghcr.io -u ${{ github.actor }} --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Restore Rolling CAS from GHCR
+        run: |
+          mkdir -p ~/.cache/buildstream
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          ROLLING_REF="ghcr.io/${REPO_LOWER}/cache-${IMAGE_NAME}-rolling:latest"
+          LEGACY_REF="ghcr.io/${REPO_LOWER}/cache-${IMAGE_NAME}-core:latest"
+          TARBALL=""
+          if oras pull "$ROLLING_REF" -o .; then
+            TARBALL="cas-rolling.tar.zst"
+          elif oras pull "$LEGACY_REF" -o .; then
+            # One-time migration: the first rolling run inherits the legacy
+            # multi-runner core cache instead of starting cold.
+            echo "No rolling cache yet, seeding from legacy core cache."
+            TARBALL="cas-core.tar.zst"
+          else
+            echo "No existing CAS cache, starting fresh."
+          fi
+          if [ -n "$TARBALL" ] && [ -f "$TARBALL" ]; then
+            zstd -d -c -T0 "$TARBALL" | tar -xf - -C "$HOME/.cache/buildstream"
+            rm -f "$TARBALL"
+          fi
+          du -sh ~/.cache/buildstream
+
+      - name: Build Target (bounded budget)
+        id: build
+        env:
+          BST_FLAGS: --no-interactive --config /src/buildstream-ci.conf
+        run: |
+          mkdir -p logs
+          # Bounded well inside the job timeout so the CAS push below always
+          # runs — a job-level timeout cancels the job and throws away hours
+          # of work. Hitting the budget is the expected steady state while
+          # converging: the partial CAS is pushed below and the next run
+          # resumes from it. Only the budget timeout is softened — a genuine
+          # build error keeps its non-zero exit code.
+          rc=0
+          timeout 300m just bst --log-file /src/logs/build-rolling.log build "$BST_TARGET" || rc=$?
+          if [ "$rc" -eq 124 ]; then
+            echo "::warning::rolling build hit the 300m budget — partial CAS is pushed below and the next run resumes from it"
+            rc=0
+          fi
+          exit $rc
+
+      - name: Push Rolling CAS to GHCR
+        # Never push when the build step was skipped (e.g. restore failed):
+        # that would clobber the good tag with an empty snapshot. A failed
+        # build still pushes — its partial progress is worth saving.
+        if: always() && steps.build.outcome != 'skipped' && steps.build.outcome != 'cancelled'
+        run: |
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          ROLLING_REF="ghcr.io/${REPO_LOWER}/cache-${IMAGE_NAME}-rolling:latest"
+          podman run --rm \
+            -v "$HOME/.cache/buildstream:/input:ro" \
+            -v "${{ github.workspace }}:/output:rw" \
+            "$BST2_IMAGE" \
+            sh -c "tar -cf - -C /input --exclude 'cas/staging' --exclude 'cas/tmp' . | zstd -T0 > /output/cas-rolling.tar.zst"
+          oras push "$ROLLING_REF" cas-rolling.tar.zst:application/vnd.buildstream.cas.tar.zst
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: build-logs-${{ env.IMAGE_NAME }}-rolling
+          path: logs/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # ── Final assembly + push ─────────────────────────────────────────────
   build_final:
-    needs: multirunner
+    needs: build_rolling
     if: always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-24.04
     timeout-minutes: 360
@@ -159,46 +209,48 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download and Merge CAS Chunks
-        env:
-          MATRIX_KEYS: ${{ needs.multirunner.outputs.matrix_keys }}
-          CACHE_KEYS: ${{ needs.multirunner.outputs.cache_keys }}
+      - name: Restore Rolling CAS from GHCR
         run: |
           mkdir -p ~/.cache/buildstream
           REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-
-          if oras pull "ghcr.io/${REPO_LOWER}/cache-${IMAGE_NAME}-core:latest" -o .; then
-            if [ -f cas-core.tar.zst ]; then
-              zstd -d -c -T0 cas-core.tar.zst | tar -xf - -C "$HOME/.cache/buildstream"
-              rm -f cas-core.tar.zst
-            fi
+          ROLLING_REF="ghcr.io/${REPO_LOWER}/cache-${IMAGE_NAME}-rolling:latest"
+          LEGACY_REF="ghcr.io/${REPO_LOWER}/cache-${IMAGE_NAME}-core:latest"
+          TARBALL=""
+          if oras pull "$ROLLING_REF" -o .; then
+            TARBALL="cas-rolling.tar.zst"
+          elif oras pull "$LEGACY_REF" -o .; then
+            echo "No rolling cache yet, seeding from legacy core cache."
+            TARBALL="cas-core.tar.zst"
+          else
+            echo "No existing CAS cache, starting fresh."
           fi
-
-          echo "$MATRIX_KEYS" | jq -r '.[]' | while read -r chunk; do
-            CACHE_KEY=$(echo "$CACHE_KEYS" | jq -r --arg c "$chunk" '.[$c] // empty')
-            PULLED=false
-            if [ -n "$CACHE_KEY" ]; then
-              if oras pull "ghcr.io/${REPO_LOWER}/cache-${IMAGE_NAME}-${chunk}:${CACHE_KEY}" -o .; then
-                PULLED=true
-              fi
-            fi
-            if [ "$PULLED" = "false" ]; then
-              oras pull "ghcr.io/${REPO_LOWER}/cache-${IMAGE_NAME}-${chunk}:latest" -o . || continue
-            fi
-            TARBALL="cas-${chunk}.tar.zst"
-            if [ -f "$TARBALL" ]; then
-              zstd -d -c -T0 "$TARBALL" | tar -xf - -C "$HOME/.cache/buildstream"
-              rm -f "$TARBALL"
-            fi
-          done
+          if [ -n "$TARBALL" ] && [ -f "$TARBALL" ]; then
+            zstd -d -c -T0 "$TARBALL" | tar -xf - -C "$HOME/.cache/buildstream"
+            rm -f "$TARBALL"
+          fi
           du -sh ~/.cache/buildstream
 
       - name: Build Final Target
+        id: build
         env:
           BST_FLAGS: --no-interactive --config /src/buildstream-ci.conf
         run: |
           mkdir -p logs
-          timeout 300m just bst --log-file /src/logs/build-final.log build ${{ needs.multirunner.outputs.final_target }}
+          timeout 300m just bst --log-file /src/logs/build-final.log build "$BST_TARGET"
+
+      - name: Salvage and Push Rolling CAS to GHCR
+        # Final gets its own 300m of build on top of the rolling builder's,
+        # so bank it even on timeout — same skip-guard as above.
+        if: always() && steps.build.outcome != 'skipped' && steps.build.outcome != 'cancelled'
+        run: |
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          ROLLING_REF="ghcr.io/${REPO_LOWER}/cache-${IMAGE_NAME}-rolling:latest"
+          podman run --rm \
+            -v "$HOME/.cache/buildstream:/input:ro" \
+            -v "${{ github.workspace }}:/output:rw" \
+            "$BST2_IMAGE" \
+            sh -c "tar -cf - -C /input --exclude 'cas/staging' --exclude 'cas/tmp' . | zstd -T0 > /output/cas-rolling.tar.zst"
+          oras push "$ROLLING_REF" cas-rolling.tar.zst:application/vnd.buildstream.cas.tar.zst
 
       - name: Capture build timestamp
         id: timestamp
@@ -300,39 +352,93 @@ jobs:
   # on the nightly schedule. Pushes exclusively to -aarch64-suffixed tags
   # (latest-aarch64, nightly-aarch64, etc.) — it can never overwrite
   # :latest/:nightly/:stable.
-  multirunner_aarch64:
+  build_rolling_aarch64:
     if: github.event_name == 'workflow_dispatch' && inputs.build_aarch64 == true
-    uses: tuna-os/bst-ci/.github/workflows/multirunner-build.yml@main
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 360
     permissions:
       contents: read
       packages: write
-    with:
-      image_name: yutyrannus-nvidia
-      bst_target: oci/yutyrannus-nvidia.bst
-      num_chunks: ${{ inputs.num_chunks || '10' }}
-      core_split: "200"
-      extra_core_targets: >-
-        qt6/qt6base.bst
-        qt6/qt6declarative.bst
-        qt6/qt6svg.bst
-        qt6/qt6wayland.bst
-        bluefin/mango.bst
-        bluefin/ghostty.bst
-        bluefin/uutils-coreutils.bst
-        bluefin/sudo-rs.bst
-        gnomeos-deps/bootc.bst
-        gaming/gamescope.bst
-        bluefin-nvidia/nvidia-drivers.bst
-        bluefin-nvidia/nvidia-vaapi-driver.bst
-        core/linux-mainline.bst
-      core_budget_minutes: "300"
-      soft_core_budget: true
-      soft_chunk_budget: true
-      arch: aarch64
+    env:
+      ARCH_SUFFIX: -aarch64
+    steps:
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          tool-cache: true
+
+      - uses: actions/checkout@v7
+      - run: podman pull "$BST2_IMAGE"
+
+      - name: Setup Just
+        uses: extractions/setup-just@v4
+
+      - name: Setup ORAS
+        uses: oras-project/setup-oras@v2
+
+      - name: Login to GHCR
+        run: echo "$GITHUB_TOKEN" | oras login ghcr.io -u ${{ github.actor }} --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Restore Rolling CAS from GHCR
+        run: |
+          mkdir -p ~/.cache/buildstream
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          ROLLING_REF="ghcr.io/${REPO_LOWER}/cache-${IMAGE_NAME}${ARCH_SUFFIX}-rolling:latest"
+          LEGACY_REF="ghcr.io/${REPO_LOWER}/cache-${IMAGE_NAME}${ARCH_SUFFIX}-core:latest"
+          TARBALL=""
+          if oras pull "$ROLLING_REF" -o .; then
+            TARBALL="cas-rolling.tar.zst"
+          elif oras pull "$LEGACY_REF" -o .; then
+            echo "No rolling cache yet, seeding from legacy core cache."
+            TARBALL="cas-core.tar.zst"
+          else
+            echo "No existing CAS cache, starting fresh."
+          fi
+          if [ -n "$TARBALL" ] && [ -f "$TARBALL" ]; then
+            zstd -d -c -T0 "$TARBALL" | tar -xf - -C "$HOME/.cache/buildstream"
+            rm -f "$TARBALL"
+          fi
+          du -sh ~/.cache/buildstream
+
+      - name: Build Target (bounded budget)
+        id: build
+        env:
+          BST_FLAGS: --no-interactive --config /src/buildstream-ci.conf
+        run: |
+          mkdir -p logs
+          rc=0
+          timeout 300m just bst --log-file /src/logs/build-rolling.log build "$BST_TARGET" || rc=$?
+          if [ "$rc" -eq 124 ]; then
+            echo "::warning::rolling build hit the 300m budget — partial CAS is pushed below and the next run resumes from it"
+            rc=0
+          fi
+          exit $rc
+
+      - name: Push Rolling CAS to GHCR
+        if: always() && steps.build.outcome != 'skipped' && steps.build.outcome != 'cancelled'
+        run: |
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          ROLLING_REF="ghcr.io/${REPO_LOWER}/cache-${IMAGE_NAME}${ARCH_SUFFIX}-rolling:latest"
+          podman run --rm \
+            -v "$HOME/.cache/buildstream:/input:ro" \
+            -v "${{ github.workspace }}:/output:rw" \
+            "$BST2_IMAGE" \
+            sh -c "tar -cf - -C /input --exclude 'cas/staging' --exclude 'cas/tmp' . | zstd -T0 > /output/cas-rolling.tar.zst"
+          oras push "$ROLLING_REF" cas-rolling.tar.zst:application/vnd.buildstream.cas.tar.zst
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: build-logs-${{ env.IMAGE_NAME }}${{ env.ARCH_SUFFIX }}-rolling
+          path: logs/
+          retention-days: 7
+          if-no-files-found: ignore
 
   build_final_aarch64:
-    needs: multirunner_aarch64
-    if: needs.multirunner_aarch64.result == 'success'
+    needs: build_rolling_aarch64
+    if: needs.build_rolling_aarch64.result == 'success'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
@@ -369,46 +475,46 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download and Merge CAS Chunks
-        env:
-          MATRIX_KEYS: ${{ needs.multirunner_aarch64.outputs.matrix_keys }}
-          CACHE_KEYS: ${{ needs.multirunner_aarch64.outputs.cache_keys }}
+      - name: Restore Rolling CAS from GHCR
         run: |
           mkdir -p ~/.cache/buildstream
           REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-
-          if oras pull "ghcr.io/${REPO_LOWER}/cache-${IMAGE_NAME}${ARCH_SUFFIX}-core:latest" -o .; then
-            if [ -f cas-core.tar.zst ]; then
-              zstd -d -c -T0 cas-core.tar.zst | tar -xf - -C "$HOME/.cache/buildstream"
-              rm -f cas-core.tar.zst
-            fi
+          ROLLING_REF="ghcr.io/${REPO_LOWER}/cache-${IMAGE_NAME}${ARCH_SUFFIX}-rolling:latest"
+          LEGACY_REF="ghcr.io/${REPO_LOWER}/cache-${IMAGE_NAME}${ARCH_SUFFIX}-core:latest"
+          TARBALL=""
+          if oras pull "$ROLLING_REF" -o .; then
+            TARBALL="cas-rolling.tar.zst"
+          elif oras pull "$LEGACY_REF" -o .; then
+            echo "No rolling cache yet, seeding from legacy core cache."
+            TARBALL="cas-core.tar.zst"
+          else
+            echo "No existing CAS cache, starting fresh."
           fi
-
-          echo "$MATRIX_KEYS" | jq -r '.[]' | while read -r chunk; do
-            CACHE_KEY=$(echo "$CACHE_KEYS" | jq -r --arg c "$chunk" '.[$c] // empty')
-            PULLED=false
-            if [ -n "$CACHE_KEY" ]; then
-              if oras pull "ghcr.io/${REPO_LOWER}/cache-${IMAGE_NAME}${ARCH_SUFFIX}-${chunk}:${CACHE_KEY}" -o .; then
-                PULLED=true
-              fi
-            fi
-            if [ "$PULLED" = "false" ]; then
-              oras pull "ghcr.io/${REPO_LOWER}/cache-${IMAGE_NAME}${ARCH_SUFFIX}-${chunk}:latest" -o . || continue
-            fi
-            TARBALL="cas-${chunk}.tar.zst"
-            if [ -f "$TARBALL" ]; then
-              zstd -d -c -T0 "$TARBALL" | tar -xf - -C "$HOME/.cache/buildstream"
-              rm -f "$TARBALL"
-            fi
-          done
+          if [ -n "$TARBALL" ] && [ -f "$TARBALL" ]; then
+            zstd -d -c -T0 "$TARBALL" | tar -xf - -C "$HOME/.cache/buildstream"
+            rm -f "$TARBALL"
+          fi
           du -sh ~/.cache/buildstream
 
       - name: Build Final Target
+        id: build
         env:
           BST_FLAGS: --no-interactive --config /src/buildstream-ci.conf
         run: |
           mkdir -p logs
-          timeout 300m just bst --log-file /src/logs/build-final.log build ${{ needs.multirunner_aarch64.outputs.final_target }}
+          timeout 300m just bst --log-file /src/logs/build-final.log build "$BST_TARGET"
+
+      - name: Salvage and Push Rolling CAS to GHCR
+        if: always() && steps.build.outcome != 'skipped' && steps.build.outcome != 'cancelled'
+        run: |
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          ROLLING_REF="ghcr.io/${REPO_LOWER}/cache-${IMAGE_NAME}${ARCH_SUFFIX}-rolling:latest"
+          podman run --rm \
+            -v "$HOME/.cache/buildstream:/input:ro" \
+            -v "${{ github.workspace }}:/output:rw" \
+            "$BST2_IMAGE" \
+            sh -c "tar -cf - -C /input --exclude 'cas/staging' --exclude 'cas/tmp' . | zstd -T0 > /output/cas-rolling.tar.zst"
+          oras push "$ROLLING_REF" cas-rolling.tar.zst:application/vnd.buildstream.cas.tar.zst
 
       - name: Capture build timestamp
         id: timestamp

@@ -32,13 +32,13 @@ jobs:
       - name: Validate publish workflow YAML
         run: |
           set -euo pipefail
-          # Verify the publish workflow triggers on the multi-runner build
-          # workflow name (not the old single-runner one).
-          if ! grep -q 'Build Yutyrannus NVIDIA (Multi-Runner)' .github/workflows/publish.yml; then
-            echo "ERROR: publish.yml must trigger on the multi-runner build workflow" >&2
+          # Verify the publish workflow triggers on the single-runner build
+          # workflow name (not the old multi-runner one).
+          if ! grep -q 'Build Yutyrannus NVIDIA' .github/workflows/publish.yml; then
+            echo "ERROR: publish.yml must trigger on the single-runner build workflow" >&2
             exit 1
           fi
-          echo "publish.yml triggers on multi-runner build workflow: OK"
+          echo "publish.yml triggers on single-runner build workflow: OK"
 
       - name: Restore BST cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
