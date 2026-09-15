@@ -6,7 +6,7 @@ sources:
 - kind: git_repo
   url: freedesktop:xorg/lib/libxmu.git
   track: libXmu-*
-  ref: libXmu-1.3.1
+  ref: 1ec0d3e3d0b055ba5e91164ada614191476e0781
 
 build-depends:
 - freedesktop-sdk.bst:public-stacks/buildsystem-autotools.bst

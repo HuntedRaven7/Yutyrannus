@@ -6,7 +6,7 @@ sources:
 - kind: git_repo
   url: freedesktop:xorg/lib/libxres.git
   track: libXres-*
-  ref: libXres-1.2.3
+  ref: 0326cfcbc528b6381d4a103c97fb26ebc77f7a26
 
 build-depends:
 - freedesktop-sdk.bst:public-stacks/buildsystem-autotools.bst
