@@ -59,8 +59,8 @@ jobs:
             "$BST2_IMAGE" \
             bash -c '
               set -x
-              echo "=== Test: bluefin/common.bst with debug ==="
-              BST_LOG_LEVEL=debug bst show bluefin/common.bst > /tmp/bst-show-debug.out 2>&1
+              echo "=== Test: oci/yutyrannus-nvidia.bst (planning-equivalent) ==="
+              bst show --deps all --order stage --format "%{name}||%{state}||%{full-key}" oci/yutyrannus-nvidia.bst > /tmp/bst-show-debug.out 2>&1
               echo "TEST_EXIT=$?"
               echo "=== Last 100 lines ==="
               tail -100 /tmp/bst-show-debug.out
