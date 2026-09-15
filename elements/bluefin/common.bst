@@ -4,7 +4,6 @@ sources:
 - kind: git_repo
   url: github:projectbluefin/common.git
   track: main
-  # Includes the external-chairlift-v1 handoff API; install.sh checks it.
   ref: v2026.08-99-g5cb020bf868d5502cceb9ecd11ff859dd3a6c6e3
 # Consume common's fastfetch layout directly; only adapt the install-date input.
 # Drop this patch once common provides a shared install-date helper.
@@ -18,18 +17,6 @@ sources:
   url: github:projectbluefin/branding/
   path: bluefin-branding
   ref: f5213ca61615bb79a8315fc4c5378a80ca93922e
-- kind: local
-  path: files/wallpaper-month
-# Image-owned integration for the Bluefin Homebrew cask; no privileged
-# helper is installed from the user-writable Brew prefix.
-- kind: git_repo
-  url: github:projectbluefin/chairlift.git
-  track: v0.12.2
-  ref: 5e92e9bd6b24d641cabcff84d079f45532ca94ae
-  directory: chairlift-upstream
-- kind: local
-  path: files/chairlift
-  directory: yutyrannus-chairlift
 
 build-depends:
 - core/sandbox-tools.bst
@@ -120,13 +107,6 @@ config:
     cp -r system_files/shared/etc/./ "%{install-root}%{sysconfdir}/"
     cp -r bluefin-branding/system_files/etc/./ "%{install-root}%{sysconfdir}/"
 
-    # Default Bluefin shell MOTD to disabled, while allowing user overrides.
-    install -Dm644 /dev/null "%{install-root}%{sysconfdir}/profile.d/bluefin-shell-defaults.sh"
-    cat > "%{install-root}%{sysconfdir}/profile.d/bluefin-shell-defaults.sh" <<'EOF'
-    : "${BLUEFIN_SHELL_ENABLE_MOTD:=0}"
-    export BLUEFIN_SHELL_ENABLE_MOTD
-    EOF
-
     # Generate ujust completions to match the upstream common image.
     install -d \
       "%{install-root}%{datadir}/bash-completion/completions" \
@@ -143,29 +123,9 @@ config:
     cp "%{install-root}%{datadir}/pixmaps/fedora-logo-icon.png" "%{install-root}%{datadir}/pixmaps/img-logo-icon-dark.png"
     # Override GNOME OS boot logo with Bluefin branding
     cp "%{install-root}%{datadir}/pixmaps/fedora-gdm-logo.png" "%{install-root}%{datadir}/pixmaps/gnome-boot-logo.png"
-    install -Dm755 bluefin-wallpaper-month-sync "%{install-root}%{prefix}/libexec/bluefin-wallpaper-month-sync"
-    install -Dm644 bluefin-wallpaper-month.service "%{install-root}%{prefix}/lib/systemd/system/bluefin-wallpaper-month.service"
-    mkdir -p "%{install-root}%{prefix}/lib/systemd/system/multi-user.target.wants"
-    ln -sfn ../bluefin-wallpaper-month.service "%{install-root}%{prefix}/lib/systemd/system/multi-user.target.wants/bluefin-wallpaper-month.service"
-
-    # Create dconf profile so the distro system database is read
-    mkdir -p "%{install-root}%{sysconfdir}/dconf/profile"
-    printf 'user-db:user\nsystem-db:distro\n' > "%{install-root}%{sysconfdir}/dconf/profile/user"
-
     # Dakota is a fresh BuildStream image — users never migrate from legacy-rechunk.
     # Remove the rechunker-group-fix migration aid that common ships for Bluefin/LTS.
     rm -f "%{install-root}%{prefix}/bin/rechunker-group-fix"
     rm -f "%{install-root}%{prefix}/lib/systemd/system/rechunker-group-fix.service"
     rm -f "%{install-root}%{prefix}/lib/systemd/system-preset/00-rechunker-group-fix.preset"
-
-    # Dakota uses its own ublue-motd (from motd.bst) with a double-display guard.
-    # Remove common's umotd.sh hook to prevent dual MOTD on every login.
-    rm -f "%{install-root}%{sysconfdir}/profile.d/umotd.sh"
-
-    # Replace common's legacy Frostyard declaration and integration, with
-    # a guarded preinstall migration for the persistent Homebrew prefix.
-    bash yutyrannus-chairlift/install.sh "%{install-root}"
-
-    # Add BudsLink to default system flatpaks
-    echo 'flatpak "io.github.maniacx.BudsLink"' >> "%{install-root}%{datadir}/ublue-os/homebrew/system-flatpaks.Brewfile"
   - "%{install-extra}"
