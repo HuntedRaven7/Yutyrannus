@@ -53,13 +53,9 @@ just bst show --deps all oci/bluefin.bst             # full dependency graph
 
 ## Desktop integrations
 
-Keep the established desktop defaults, with fuzzy application search, Tiling
-Shell, and BudsLink enabled. BudsLink's default panel stays hidden until a
-supported device is present. Syncthing Toggle, Tailscale Quick Settings, Copyous
-clipboard history, the extra audio panel/hider/renamer, and Power Status Color
-are installed but opt-in through the Extensions app. Their required backends
-remain available; enabling a control should not require installing missing
-native software.
+Keep the established desktop defaults, with fuzzy application search, tiling
+layout, and clipboard utilities available. Brightness control, media keys,
+and power status reporting are installed by default.
 
 - **Sync Folder (Syncthing):** `bluefin/syncthing.bst` builds the vendored source
   release, with CGO SQLite support and self-updates disabled. A private
@@ -78,12 +74,6 @@ native software.
   assignment. No auth keys, tailnet identity, exit-node selection, or automatic
   privilege grants are baked into the image. Closing setup does not disconnect
   an existing connection or revoke an already-approved operator assignment.
-- **BudsLink:** the companion Flatpak is declared in the image's preinstall
-  configuration. `flatpak-preinstall.service` checks `flatpak preinstall --help`
-  before invoking installation. The extension activates the app's D-Bus service
-  when supported earbuds connect, and retries if installation finishes after
-  login. Installation needs network access; pairing remains the user's choice.
-
 Syncthing and Tailscale are independent controls. There is no automatic tailnet
 folder sharing: Syncthing devices and folders require explicit pairing/sharing.
 

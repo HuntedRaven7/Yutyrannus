@@ -108,7 +108,6 @@ jobs:
         bluefin-nvidia/nvidia-drivers.bst
         bluefin-nvidia/nvidia-vaapi-driver.bst
         core/linux-mainline.bst
-        bluefin/vte.bst
       # That spine is well over a single job's worth of serial work at 2
       # cores, so core will exhaust its budget for the first few runs. Its
       # CAS is pushed regardless (the push step is if: always()), so each
@@ -326,7 +325,6 @@ jobs:
         bluefin-nvidia/nvidia-drivers.bst
         bluefin-nvidia/nvidia-vaapi-driver.bst
         core/linux-mainline.bst
-        bluefin/vte.bst
       core_budget_minutes: "300"
       soft_core_budget: true
       soft_chunk_budget: true
