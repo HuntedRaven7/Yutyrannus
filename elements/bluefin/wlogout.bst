@@ -2,8 +2,8 @@ kind: meson
 
 sources:
 - kind: tar
-  url: wlogout_releases:v1.2.1/wlogout-1.2.1.tar.gz
-  ref: ceb64ada0cd16d7a2603f65dd5e1c4ab15837dc84ff1541de10d3f49637be243
+  url: wlogout_releases:1.2.1/wlogout.tar.gz
+  ref: 543a6e9abb8609863eac0460c37226b070bc070763115c0a85604fecb87fe0bb
 
 build-depends:
 - freedesktop-sdk.bst:public-stacks/buildsystem-meson.bst

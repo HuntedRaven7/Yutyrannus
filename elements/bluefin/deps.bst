@@ -83,7 +83,7 @@ depends:
   - bluefin/rofi.bst
   - bluefin/grim.bst
   - bluefin/bluetui.bst
-  - bluefin/swaync.bst
+  - bluefin/mako.bst
   - bluefin/wlogout.bst
   - bluefin/mate-polkit.bst
   - bluefin/brightnessctl.bst

@@ -76,15 +76,15 @@
       "enabled": true
     },
     {
-      "description": "Track SwayNC upstream releases",
-      "matchManagers": ["regex"],
-      "matchFileNames": ["elements/bluefin/swaync.bst"],
-      "enabled": true
-    },
-    {
       "description": "Track wlogout upstream releases",
       "matchManagers": ["regex"],
       "matchFileNames": ["elements/bluefin/wlogout.bst"],
+      "enabled": true
+    },
+    {
+      "description": "Track Mako upstream releases",
+      "matchManagers": ["regex"],
+      "matchFileNames": ["elements/bluefin/mako.bst"],
       "enabled": true
     },
     {
@@ -170,20 +170,20 @@
       "versioningTemplate": "semver"
     },
     {
-      "fileMatch": ["elements/bluefin/swaync.bst"],
+      "fileMatch": ["elements/bluefin/wlogout.bst"],
       "matchStrings": [
-        'url:\\s+swaync_releases:v(?<version>[0-9.]+)/swaync-(?<version>[0-9.]+)\\.tar\\.gz'
+        'url:\\s+wlogout_releases:(?<version>[0-9.]+)/wlogout\\.tar\\.gz'
       ],
-      "depNameTemplate": "ErikReider/SwayNotificationCenter",
+      "depNameTemplate": "ArtsyMacaw/wlogout",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
     },
     {
-      "fileMatch": ["elements/bluefin/wlogout.bst"],
+      "fileMatch": ["elements/bluefin/mako.bst"],
       "matchStrings": [
-        'url:\\s+wlogout_releases:v(?<version>[0-9.]+)/wlogout-(?<version>[0-9.]+)\\.tar\\.gz'
+        'url:\\s+mako_releases:v(?<version>[0-9.]+)/mako-(?<version>[0-9.]+)\\.tar\\.gz'
       ],
-      "depNameTemplate": "ArtsyMacaw/wlogout",
+      "depNameTemplate": "emersion/mako",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
     },
