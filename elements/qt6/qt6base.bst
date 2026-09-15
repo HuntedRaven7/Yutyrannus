@@ -1,9 +1,13 @@
 kind: manual
 
 sources:
+# ref verified against Qt's own MirrorBrain metadata for this file
+# (download.qt.io/.../qt-everywhere-src-6.8.1.tar.xz.mirrorlist, SHA-256),
+# which matches the tarball served over HTTPS. The previous ref did not
+# match anything Qt publishes.
 - kind: tar
   url: qt_downloads:6.8/6.8.1/single/qt-everywhere-src-6.8.1.tar.xz
-  ref: 40b14562ef3bd779bc0e0418ea2ae08fa28235f8ea6e8c0cb3bce1d6ad58dcaf
+  ref: 45e3a9f6d33c92ffe65a1fde1a8eba5b228112df675f7f9026eaa332b2e2edff
 
 build-depends:
 - freedesktop-sdk.bst:public-stacks/buildsystem-cmake.bst
