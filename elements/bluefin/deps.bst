@@ -85,6 +85,6 @@ depends:
   - bluefin/bluetui.bst
   - bluefin/swaync.bst
   - bluefin/wlogout.bst
-  - bluefin/polkit-gnome.bst
+  - bluefin/mate-polkit.bst
   - bluefin/brightnessctl.bst
   - bluefin/playerctl.bst
