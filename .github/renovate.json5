@@ -116,7 +116,7 @@
     {
         "fileMatch": ["elements/bluefin/mango.bst"],
       "matchStrings": [
-        'ref: (?<version>[0-9]+\\.[0-9]+\\.[0-9]+)-0-g[0-9a-f]+'
+        'url:\\s+mango_releases:(?<version>[0-9.]+)/mango-(?<version>[0-9.]+)\\.tar\\.gz'
       ],
       "depNameTemplate": "mangowm/mango",
       "datasourceTemplate": "github-releases",
